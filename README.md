@@ -1,10 +1,22 @@
 # eccrypto
 ecc secp256k1 crypto
 
-### 1. CreateHexKey() (string, string, error) 创建secp256k1公钥和私钥
-### 2. LoadHexKey(priHex, pubHex string) (*ecies.PrivateKey, error) 加载secp256k1公钥和私钥
-### 3. Encrypt(pub ecies.PublicKey, msg []byte) (string, error) 通过公钥加密数据返回Base64字符串
-### 4. Decrypt(prk *ecies.PrivateKey, msg string) (string, error) 通过私钥解密Base64字符串返回明文
+#### 1. 创建secp256k1公钥和私钥
+```
+CreateHexKey() (string, string, error)
+```
+#### 2. 加载secp256k1公钥和私钥
+```
+LoadHexKey(priHex, pubHex string) (*ecies.PrivateKey, error)
+```
+#### 3. 通过公钥加密数据返回Base64字符串
+```
+Encrypt(pub ecies.PublicKey, msg []byte) (string, error)
+```
+#### 4. 通过私钥解密Base64字符串返回明文
+```
+Decrypt(prk *ecies.PrivateKey, msg string) (string, error)
+```
 
 ## 性能测试
 ```

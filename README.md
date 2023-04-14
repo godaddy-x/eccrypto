@@ -20,6 +20,21 @@ Decrypt(prk *ecies.PrivateKey, msg string) (string, error)
 
 ## 性能测试
 ```
+func BenchmarkEncryptAndDecrypt(b *testing.B) {
+	b.StopTimer()
+	b.StartTimer()
+	for i := 0; i < b.N; i++ { //use b.N for looping
+		ct, err := Encrypt(prk.PublicKey, testMsg)
+		if err != nil {
+			panic(err)
+		}
+		_, err = Decrypt(prk, ct)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 goos: windows
 goarch: amd64
 pkg: github.com/godaddy-x/eccrypto

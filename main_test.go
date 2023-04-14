@@ -2,10 +2,8 @@ package ecc
 
 import (
 	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/godaddy-x/eccrypto/crypto/ecies"
 	"testing"
 )
 
@@ -52,20 +50,14 @@ var (
 func BenchmarkEncryptAndDecrypt(b *testing.B) {
 	b.StopTimer()
 	b.StartTimer()
-	prk, err := LoadHexKey(privateKeyHex, publicKeyHex)
-	if err != nil {
-		panic(err)
-	}
 	for i := 0; i < b.N; i++ { //use b.N for looping
-		ct, err := ecies.Encrypt(rand.Reader, &prk.PublicKey, testMsg, nil, nil)
+		ct, err := Encrypt(prk.PublicKey, testMsg)
 		if err != nil {
 			panic(err)
 		}
-		//fmt.Println("加密结果: ", hex.EncodeToString(ct))
-		_, err = prk.Decrypt(ct, nil, nil)
+		_, err = Decrypt(prk, ct)
 		if err != nil {
 			panic(err)
 		}
-		//fmt.Println("解密结果: ", string(ct2))
 	}
 }

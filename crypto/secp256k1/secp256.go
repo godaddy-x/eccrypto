@@ -42,6 +42,8 @@ import (
 	"unsafe"
 )
 
+// libsecp256k1
+
 var context *C.secp256k1_context
 
 func init() {

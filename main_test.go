@@ -4,6 +4,7 @@ import (
 	"crypto/elliptic"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/metrics"
 	"testing"
 )
 
@@ -67,6 +68,10 @@ func TestDecrypt(t *testing.T) {
 		panic(err)
 	}
 	fmt.Println("解密结果: ", ct)
+}
+
+func TestEncryptETH(t *testing.T) {
+	metrics.NewRegisteredMeter("eth/fetcher/block/announces/in", nil)
 }
 
 var (

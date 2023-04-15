@@ -69,7 +69,7 @@ func LoadBase64Key(prkBase64, pubBase64 string) (*ecies.PrivateKey, error) {
 		prk.D = new(big.Int).SetBytes(privateKeyBytes)
 	}
 	if len(pubBase64) > 0 {
-		publicKeyBytes, err := hex.DecodeString(pubBase64)
+		publicKeyBytes, err := base64.StdEncoding.DecodeString(pubBase64)
 		if err != nil {
 			return nil, err
 		}

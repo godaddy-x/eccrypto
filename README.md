@@ -76,7 +76,7 @@ PASS
 ### JS版本交互
 ```
 # yarn add eccrypto
-import eccrypto from 'ecccrypto'
+import eccrypto from 'eccrypto'
 
 const ECCEncrypt = async function () {
     // public key provided by the server

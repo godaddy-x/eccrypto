@@ -34,7 +34,7 @@ func TestEncryptAndDecrypt(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	ct, err := Encrypt(prk.PublicKey, testMsg)
+	ct, err := Encrypt(&prk.PublicKey, testMsg)
 	fmt.Println("加密结果: ", ct)
 	ct2, err := Decrypt(prk, ct)
 	if err != nil {
@@ -43,21 +43,65 @@ func TestEncryptAndDecrypt(t *testing.T) {
 	fmt.Println("解密结果: ", ct2)
 }
 
+func TestEncrypt(t *testing.T) {
+	prk, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
+	ct, err := Encrypt(&prk.PublicKey, testMsg)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("加密结果: ", ct)
+}
+
+func TestDecrypt(t *testing.T) {
+	prk, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
+	//msg := `BIuYCEbN0SmuX4LfVlgehwxVA5RiLou/N+CmxVa2PBk6euJH51agVfxWlhTXyg2Bfl+xKN1DrueoS4OQY033LgBtpqRaMPmTQxaOP2dxyQeRI0GnHRsojGPZQZksWe8Rkn+rZaRJbFgpwVVrUwcKZ1TpnJdDZVxshqytwRshxCpfbTZl5XyOkWZF92EMzwQtytwuC6xcf+lLS2omR3cVXH0=`
+	msg := `BDgcT7waxivyXZPYaYzx8PVPdTkyagFmyoOej3yp103QgIG4zszAOxivcDW1z7SUzErcIfSn66OkmU2gZh91QhaO7o3HLxW6VPDWlMcjRCbPWeVtgVE3FnH8KQWVTUrEANZdHiE0myyQasUE/umrgxNPghEkg6kNWKbal1Mkbh1pJA+OGvB3G7GOW89OaCDhlfA0EOA8A+8Aim+3eSnOp25tVJbIafEGam9KCYNbtley`
+	ct, err := Decrypt(prk, msg)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("解密结果: ", ct)
+}
+
 var (
 	prk, _ = LoadHexKey(privateKeyHex, publicKeyHex)
 )
 
-func BenchmarkEncryptAndDecrypt(b *testing.B) {
+func BenchmarkEncrypt(b *testing.B) {
 	b.StopTimer()
 	b.StartTimer()
+	server, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
 	for i := 0; i < b.N; i++ { //use b.N for looping
-		ct, err := Encrypt(prk.PublicKey, testMsg)
+		_, err = Encrypt(&server.PublicKey, testMsg)
 		if err != nil {
 			panic(err)
 		}
-		_, err = Decrypt(prk, ct)
+		//fmt.Println("加密结果: ", ct)
+	}
+}
+
+func BenchmarkDecrypt(b *testing.B) {
+	b.StopTimer()
+	b.StartTimer()
+	server, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ { //use b.N for looping
+		msg := `BIuYCEbN0SmuX4LfVlgehwxVA5RiLou/N+CmxVa2PBk6euJH51agVfxWlhTXyg2Bfl+xKN1DrueoS4OQY033LgBtpqRaMPmTQxaOP2dxyQeRI0GnHRsojGPZQZksWe8Rkn+rZaRJbFgpwVVrUwcKZ1TpnJdDZVxshqytwRshxCpfbTZl5XyOkWZF92EMzwQtytwuC6xcf+lLS2omR3cVXH0=`
+		_, err = Decrypt(server, msg)
 		if err != nil {
 			panic(err)
 		}
+		//fmt.Println("解密结果: ", ct)
 	}
 }

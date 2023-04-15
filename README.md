@@ -11,35 +11,84 @@ LoadHexKey(priHex, pubHex string) (*ecies.PrivateKey, error)
 ```
 #### 3. 通过公钥加密数据返回Base64字符串
 ```
-Encrypt(pub ecies.PublicKey, msg []byte) (string, error)
+Encrypt(pub *ecies.PublicKey, msg []byte) (string, error)
 ```
 #### 4. 通过私钥解密Base64字符串返回明文
 ```
 Decrypt(prk *ecies.PrivateKey, msg string) (string, error)
 ```
 
-## 性能测试
+## 数据加密性能测试
 ```
-func BenchmarkEncryptAndDecrypt(b *testing.B) {
+func BenchmarkEncrypt(b *testing.B) {
 	b.StopTimer()
 	b.StartTimer()
+	server, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
 	for i := 0; i < b.N; i++ { //use b.N for looping
-		ct, err := Encrypt(prk.PublicKey, testMsg)
+		_, err = Encrypt(&server.PublicKey, testMsg)
 		if err != nil {
 			panic(err)
 		}
-		_, err = Decrypt(prk, ct)
-		if err != nil {
-			panic(err)
-		}
+		//fmt.Println("加密结果: ", ct)
 	}
 }
 
-goos: windows
+goos: darwin
 goarch: amd64
 pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkEncryptAndDecrypt
-BenchmarkEncryptAndDecrypt-12               3061            392791 ns/op
+cpu: Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz
+BenchmarkEncrypt
+BenchmarkEncrypt-8   	    8632	    145256 ns/op
 PASS
+```
+
+## 数据解密性能测试
+```
+func BenchmarkDecrypt(b *testing.B) {
+	b.StopTimer()
+	b.StartTimer()
+	server, err := LoadHexKey(privateKeyHex, publicKeyHex)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ { //use b.N for looping
+		msg := `BIuYCEbN0SmuX4LfVlgehwxVA5RiLou/N+CmxVa2PBk6euJH51agVfxWlhTXyg2Bfl+xKN1DrueoS4OQY033LgBtpqRaMPmTQxaOP2dxyQeRI0GnHRsojGPZQZksWe8Rkn+rZaRJbFgpwVVrUwcKZ1TpnJdDZVxshqytwRshxCpfbTZl5XyOkWZF92EMzwQtytwuC6xcf+lLS2omR3cVXH0=`
+		_, err = Decrypt(server, msg)
+		if err != nil {
+			panic(err)
+		}
+		//fmt.Println("解密结果: ", string(a))
+	}
+}
+
+goos: darwin
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz
+BenchmarkDecrypt
+BenchmarkDecrypt-8   	   16538	     74126 ns/op
+PASS
+```
+
+### JS版本交互
+```
+# yarn add eccrypto
+import eccrypto from 'ecccrypto'
+
+const ECCEncrypt = async function () {
+    // public key provided by the server
+    const publicKey = Buffer.from('04a1a1bb7d6f60aa74a4df5db9ded28bf60401070f91091256744e65f2a6c918f1dc312bbb9729879acb57c83085a2759bfe89a0c40b64137e1ea8746070e7541e', 'hex')
+    const message = Buffer.from('我是中国人,test!!!')
+    // use the shared secret to encrypt the message using ECIES
+    const encrypted = await eccrypto.encrypt(publicKey, message, {})
+    // console.log(encrypted)
+    console.log('iv: ', encrypted.iv.length, encrypted.iv.toString('hex'))
+    console.log('ephemPublicKey: ', encrypted.ephemPublicKey.length, encrypted.ephemPublicKey.toString('hex'))
+    console.log('ciphertext: ', encrypted.ciphertext.length, encrypted.ciphertext.toString('hex'))
+    console.log('mac: ', encrypted.mac.length, encrypted.mac.toString('hex'))
+    console.log('response: ', Buffer.concat([encrypted.ephemPublicKey, encrypted.iv, encrypted.mac, encrypted.ciphertext]).toString('base64'))
+}
 ```

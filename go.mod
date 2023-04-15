@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
-	github.com/ethereum/go-ethereum v1.11.5
 	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa
 	github.com/jedisct1/go-minisign v0.0.0-20230410063418-3d885d71f62c
 	github.com/stretchr/testify v1.8.0

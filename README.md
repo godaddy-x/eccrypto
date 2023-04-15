@@ -60,7 +60,7 @@ func BenchmarkDecrypt(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		//fmt.Println("解密结果: ", string(a))
+		//fmt.Println("解密结果: ", string(ct))
 	}
 }
 

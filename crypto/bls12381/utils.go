@@ -18,13 +18,12 @@ package bls12381
 
 import (
 	"errors"
+	"github.com/godaddy-x/eccrypto/crypto"
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func bigFromHex(hex string) *big.Int {
-	return new(big.Int).SetBytes(common.FromHex(hex))
+	return new(big.Int).SetBytes(crypto.FromHex(hex))
 }
 
 // decodeFieldElement expects 64 byte input with zero top 16 bytes,

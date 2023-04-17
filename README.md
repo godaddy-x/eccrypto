@@ -1,47 +1,104 @@
 # eccrypto
 ecdsa p256 ecies
 
-#### 1. 创建ECDSA P256公钥和私钥
+#### 1. Create privateKey and publicKey by ECDSA
 ```
 CreateECDSA() (*ecdsa.PrivateKey, error)
 ```
-#### 2. 加载Hex私钥
+#### 2. Load privateKey by hex
 ```
 LoadHexPrivateKey(h string) (*ecdsa.PrivateKey, error)
 ```
-#### 3. 加载Hex公钥
+#### 3. Load publicKey by hex
 ```
 LoadHexPublicKey(h string) (*ecdsa.PublicKey, []byte, error)
 ```
-#### 4. 加载Base64公钥
+#### 4. Load publicKey by base64
 ```
-LoadHexPublicKey(h string) (*ecdsa.PublicKey, []byte, error)
+LoadBase64PublicKey(h string) (*ecdsa.PublicKey, []byte, error)
 ```
-### 5. 通过私钥和公钥生成协商密钥
-```
-GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error)
-```
-### 6. 通过私钥和公钥生成协商密钥
+### 5. Generate share key by privateKey and publicKey
 ```
 GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error)
 ```
-### 7. 通过公钥生成协商密钥并加密数据
+### 6. Encrypt plaintext by publicKey
 ```
 Encrypt(publicTo, message []byte) ([]byte, error)
 ```
-### 8. 通过私钥生成协商密钥并解密数据
+### 7. Decrypt ciphertext by privateKey
 ```
 Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error)
 ```
-### 9. 通过私钥和公钥生成协商密钥
-```
-GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error)
-```
-### 10. 通过私钥签名数据
+### 8. Sign Data by privateKey
 ```
 Sign(prk *ecdsa.PrivateKey, msg []byte) ([]byte, error)
 ```
-### 11. 通过公钥验签数据
+### 9. Verify data by publicKey
 ```
 Verify(pub *ecdsa.PublicKey, msg, sign []byte) bool
 ```
+
+### Benchmark
+
+```
+// CreateECDSA
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECDSACreate
+BenchmarkECDSACreate-12            94461             12089 ns/op
+```
+
+```
+// GenSharedKey
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECCSharedKey
+BenchmarkECCSharedKey-12           26563             44460 ns/op
+```
+
+```
+// Encrypt
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECDSAEncrypt
+BenchmarkECDSAEncrypt-12           19818             60096 ns/op
+```
+
+```
+// Decrypt
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECCDecrypt
+BenchmarkECCDecrypt-12             24715             48010 ns/op
+```
+
+```
+// Sign
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECCSign
+BenchmarkECCSign-12        57798             20354 ns/op
+```
+
+```
+// Verify
+goos: windows
+goarch: amd64
+pkg: github.com/godaddy-x/eccrypto
+cpu: 12th Gen Intel(R) Core(TM) i5-12400F
+BenchmarkECCVerify
+BenchmarkECCVerify-12              19876             60247 ns/op
+```
+
+
+

@@ -44,6 +44,17 @@ const sha512 = async function (data) {
 }
 
 /**
+ * @param {String} data
+ * @returns Buffer
+ */
+const sha256 = async function (data) {
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', Buffer.from(data))
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashValue = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    return Buffer.from(hashValue, 'hex')
+}
+
+/**
  * @param {Buffer} data
  * @param {Buffer} key
  * @returns Buffer
@@ -111,6 +122,42 @@ export const encrypt = async function (pub, msg) {
 
     const response = Buffer.concat([ephemPublicKey, iv, realMac, ciphertext]).toString('base64')
     return response
+}
+
+/**
+ * @param {String} privateKeyHex
+ * @param {String} msg
+ * @returns String(Hex)
+ */
+export async function sign (privateKeyHex, msg) {
+    const EC = elliptic.ec
+    const curve = new EC('p256')
+    const keyPair = curve.keyFromPrivate(privateKeyHex, 'hex')
+    const hash = await sha256(msg)
+    const signature = keyPair.sign(hash)
+    const r = signature.r.toString('hex')
+    const s = signature.s.toString('hex')
+    return r + s
+}
+
+/**
+ * @param {String} publicKeyHex
+ * @param {String} msg
+ * @param {Hex} sign
+ * @returns Boolean
+ */
+export async function verify (publicKeyHex, msg, sign) {
+    const EC = elliptic.ec
+    const curve = new EC('p256')
+    const keyPair = curve.keyFromPublic(publicKeyHex, 'hex')
+    const hash = await sha256(msg)
+    const r = sign.slice(0, 64)
+    const s = sign.slice(64)
+    const signature = {
+        r: Buffer.from(r, 'hex'),
+        s: Buffer.from(s, 'hex')
+    }
+    return keyPair.verify(hash, signature)
 }
 
 /**

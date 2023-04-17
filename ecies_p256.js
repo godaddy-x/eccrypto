@@ -33,7 +33,7 @@ const aes256CbcEncrypt = async function (iv, key, plaintext) {
 }
 
 /**
- * @param {String} data
+ * @param {string} data
  * @returns Buffer
  */
 const sha512 = async function (data) {
@@ -44,7 +44,7 @@ const sha512 = async function (data) {
 }
 
 /**
- * @param {String} data
+ * @param {string} data
  * @returns Buffer
  */
 const sha256 = async function (data) {
@@ -96,9 +96,9 @@ const derivePublic = function (curve, publicKey) {
 }
 
 /**
- * @param {Hex} pub
+ * @param {hex} pub
  * @param {Buffer} msg
- * @returns String(base64)
+ * @returns string(base64)
  */
 export const encrypt = async function (pub, msg) {
     const EC = elliptic.ec
@@ -125,14 +125,14 @@ export const encrypt = async function (pub, msg) {
 }
 
 /**
- * @param {String} privateKeyHex
- * @param {String} msg
- * @returns String(Hex)
+ * @param {hex} privateKey
+ * @param {string} msg
+ * @returns string(hex)
  */
-export async function sign (privateKeyHex, msg) {
+export const sign = async function (privateKey, msg) {
     const EC = elliptic.ec
     const curve = new EC('p256')
-    const keyPair = curve.keyFromPrivate(privateKeyHex, 'hex')
+    const keyPair = curve.keyFromPrivate(privateKey, 'hex')
     const hash = await sha256(msg)
     const signature = keyPair.sign(hash)
     const r = signature.r.toString('hex')
@@ -141,15 +141,15 @@ export async function sign (privateKeyHex, msg) {
 }
 
 /**
- * @param {String} publicKeyHex
- * @param {String} msg
- * @param {Hex} sign
- * @returns Boolean
+ * @param {hex} publicKey
+ * @param {string} msg
+ * @param {hex} sign
+ * @returns boolean
  */
-export async function verify (publicKeyHex, msg, sign) {
+export const verify = async function (publicKey, msg, sign) {
     const EC = elliptic.ec
     const curve = new EC('p256')
-    const keyPair = curve.keyFromPublic(publicKeyHex, 'hex')
+    const keyPair = curve.keyFromPublic(publicKey, 'hex')
     const hash = await sha256(msg)
     const r = sign.slice(0, 64)
     const s = sign.slice(64)
@@ -161,9 +161,9 @@ export async function verify (publicKeyHex, msg, sign) {
 }
 
 /**
- * @param {String} data
- * @param {Base64} publicKey
- * @returns String(base64)
+ * @param {string} data
+ * @param {base64} publicKey
+ * @returns string(base64)
  */
 export const encryptByBase64Public = async function (publicKey, data) {
     const result = await encrypt(Buffer.from(publicKey, 'base64').toString('hex'), Buffer.from(data))
@@ -171,9 +171,9 @@ export const encryptByBase64Public = async function (publicKey, data) {
 }
 
 /**
- * @param {String} data
- * @param {Hex} publicKey
- * @returns String(base64)
+ * @param {string} data
+ * @param {hex} publicKey
+ * @returns string(base64)
  */
 export const encryptByHexPublic = async function (publicKey, data) {
     const result = await encrypt(publicKey, Buffer.from(data))

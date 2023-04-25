@@ -88,7 +88,8 @@ const derivePublic = function (curve, publicKey) {
     const ephemPublicKey = Buffer.from(tempPublic.encode('hex', false), 'hex')
     let shared = tempPrivate.derive(publicKey.getPublic()).toString('hex')
     if (shared.length < 64) {
-        for (let i = 0; i < 64 - shared.length; i++) {
+        const slen = 64 - shared.length
+        for (let i = 0; i < slen; i++) {
             shared = '0' + shared
         }
     }

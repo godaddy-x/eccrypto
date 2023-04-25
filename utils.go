@@ -122,7 +122,8 @@ func hexToBytes(s string) []byte {
 func fillSharedKeyHex(b []byte) []byte {
 	sharedKeyHex := hex.EncodeToString(b)
 	if len(sharedKeyHex) < 64 {
-		for i := 0; i < 64-len(sharedKeyHex); i++ {
+		cha := 64 - len(sharedKeyHex)
+		for i := 0; i < cha; i++ {
 			sharedKeyHex = `0` + sharedKeyHex
 		}
 	}

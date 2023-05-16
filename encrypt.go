@@ -43,6 +43,18 @@ func LoadHexPrivateKey(h string) (*ecdsa.PrivateKey, error) {
 	return prk, nil
 }
 
+func LoadBase64PrivateKey(h string) (*ecdsa.PrivateKey, error) {
+	b, err := base64.StdEncoding.DecodeString(h)
+	if err != nil {
+		return nil, errors.New("bad private key")
+	}
+	prk, err := x509.ParseECPrivateKey(b)
+	if err != nil {
+		return nil, errors.New("parse private key failed")
+	}
+	return prk, nil
+}
+
 func LoadPublicKey(h []byte) (*ecdsa.PublicKey, error) {
 	if len(h) != pLen {
 		return nil, errors.New("publicKey invalid")
@@ -101,6 +113,22 @@ func GetObjectBytes(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) ([]byte, []byte
 		pubBs = elliptic.Marshal(defaultCurve, pub.X, pub.Y)
 	}
 	return prkBs, pubBs, nil
+}
+
+func GetObjectBase64(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (string, string, error) {
+	prkBs, pubBs, err := GetObjectBytes(prk, pub)
+	if err != nil {
+		return "", "", err
+	}
+	return base64.StdEncoding.EncodeToString(prkBs), base64.StdEncoding.EncodeToString(pubBs), nil
+}
+
+func GetObjectHex(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (string, string, error) {
+	prkBs, pubBs, err := GetObjectBytes(prk, pub)
+	if err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(prkBs), hex.EncodeToString(pubBs), nil
 }
 
 func GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error) {

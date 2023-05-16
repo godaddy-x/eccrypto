@@ -11,6 +11,16 @@ var (
 	testMsg = []byte("我是中国人梵蒂冈啊!!!ABC@#")
 )
 
+func TestCreateECDSA(t *testing.T) {
+	prk, _ := CreateECDSA()
+	prkS, pubS, err := GetObjectBase64(prk, &prk.PublicKey)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("私钥Base64: ", prkS)
+	fmt.Println("公钥Base64: ", pubS)
+}
+
 func TestECCEncrypt(t *testing.T) {
 	prk, _ := CreateECDSA() // 服务端
 	_, pubBs, _ := GetObjectBytes(prk, &prk.PublicKey)

@@ -15,6 +15,11 @@ import 'package:pointycastle/pointycastle.dart';
 import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:pointycastle/signers/ecdsa_signer.dart';
 
+/**
+ * dependencies:
+ *   pointycastle: ^3.7.3
+ *   http: ^0.13.4
+ */
 Future<void> main() async {
   // ECC测试
   // String messag = "我是中国人梵蒂冈啊!!!ABC@#";
@@ -34,14 +39,20 @@ Future<void> main() async {
   // bool valid = verify(keyPair.publicKey, stringToUint8List(messag), r);
   // print("ECC验签: $valid");
   // http请求接口格式实现
-  https://crmadm.lbdev.fun/adm/PublicKey
-  for(var i = 0; i<10000; i++){
+  https: //crmadm.lbdev.fun/adm/PublicKey
+  for (var i = 0; i < 10000; i++) {
     String domain = "https://crmapi.lbdev.fun";
     String publicKey = await getPublicKey("$domain/api/public_key");
     print("服务端公钥: $publicKey");
     // https://crmapi.lbdev.fun/api/reg?mobile=13823912345&password=123456&email=123456@qq.com
     await postByECC(
-        domain, "/api/login", publicKey, {'mobile': "13823912345", 'email': "123456@qq.com", 'code': '123', 'username':"123", 'password': "123456"});
+        domain, "/api/login", publicKey, {
+      'mobile': "13823912345",
+      'email': "123456@qq.com",
+      'code': '123',
+      'username': "123",
+      'password': "123456"
+    });
     print("----------------------------------------------");
     await postData(domain, "/adm/getUser", {}, true);
   }
@@ -382,7 +393,7 @@ Future<TokenInfo> postByECC(String domain, String path, String publicKey,
     print("令牌: ${tokenInfo.token}");
     return tokenInfo;
   }
-  throw Exception("请求失败: "+map['m']);
+  throw Exception("请求失败: " + map['m']);
 }
 
 /// domain 请求域名

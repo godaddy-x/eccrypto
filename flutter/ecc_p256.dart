@@ -39,15 +39,13 @@ Future<void> main() async {
   // bool valid = verify(keyPair.publicKey, stringToUint8List(messag), r);
   // print("ECC验签: $valid");
   // http请求接口格式实现
-  https: //crmadm.lbdev.fun/adm/PublicKey
   for (var i = 0; i < 10000; i++) {
-    String domain = "https://crmapi.lbdev.fun";
+    String domain = "https://127.0.0.1";
     String publicKey = await getPublicKey("$domain/api/public_key");
     print("服务端公钥: $publicKey");
-    // https://crmapi.lbdev.fun/api/reg?mobile=13823912345&password=123456&email=123456@qq.com
     await postByECC(
         domain, "/api/login", publicKey, {
-      'mobile': "13823912345",
+      'mobile': "13823900000",
       'email': "123456@qq.com",
       'code': '123',
       'username': "123",

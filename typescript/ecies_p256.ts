@@ -1,6 +1,9 @@
 import * as elliptic from 'elliptic'
 import CryptoJS from "crypto-js";
 
+const EC = elliptic.ec
+const curve = new EC('p256')
+
 /**
  * @param {int} len
  * @returns Buffer
@@ -75,11 +78,10 @@ const hmac256 = (data: Buffer, key: Buffer): Buffer => {
 };
 
 /**
- * @param {EC} curve
  * @param {PublicKey} publicKey
  * @returns Buffer, Buffer
  */
-const derivePublic = function (curve: elliptic.ec, publicKey: elliptic.ec.KeyPair) {
+const derivePublic = function (publicKey: elliptic.ec.KeyPair) {
     const tempPrivate = curve.genKeyPair()
     const tempPublic = tempPrivate.getPublic()
     const ephemPublicKey = Buffer.from(tempPublic.encode('hex', false), 'hex')
@@ -99,20 +101,18 @@ const derivePublic = function (curve: elliptic.ec, publicKey: elliptic.ec.KeyPai
  * @returns string(base64)
  */
 export const encrypt = function (pub: string | Uint8Array | Buffer | number[] | elliptic.ec.KeyPair | { x: string; y: string }, msg: Buffer) {
-    const EC = elliptic.ec
-    const curve = new EC('p256')
     const publicKey = curve.keyFromPublic(pub, 'hex')
-    const { ephemPublicKey, shared } = derivePublic(curve, publicKey)
+    const { ephemPublicKey, shared } = derivePublic(publicKey)
 
     const sharedHash = sha512(shared)
-
-    const encryptionKey = sharedHash.slice(0, 32)
-    const macKey = sharedHash.slice(32)
+    const encryptionKey = sharedHash.subarray(0, 32)
+    const macKey = sharedHash.subarray(32)
 
     const iv = randomBytes(16)
     const ciphertext = aes256CbcEncrypt(iv, encryptionKey, msg)
-    const hashData = Buffer.concat([iv, ephemPublicKey, ciphertext])
 
+
+    const hashData = Buffer.concat([iv, ephemPublicKey, ciphertext])
     const realMac = hmac256(hashData, macKey)
 
     const response = Buffer.concat([ephemPublicKey, iv, realMac, ciphertext]).toString('base64')

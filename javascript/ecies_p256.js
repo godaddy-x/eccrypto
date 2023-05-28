@@ -6,6 +6,9 @@
  */
 import * as elliptic from 'elliptic'
 
+const EC = elliptic.ec
+const curve = new EC('p256')
+
 /**
  * @param {int} len
  * @returns Buffer
@@ -78,11 +81,10 @@ const hmac256 = async function (data, key) {
 }
 
 /**
- * @param {EC} curve
  * @param {PublicKey} publicKey
  * @returns Buffer, Buffer
  */
-const derivePublic = function (curve, publicKey) {
+const derivePublic = function (publicKey) {
     const tempPrivate = curve.genKeyPair()
     const tempPublic = tempPrivate.getPublic()
     const ephemPublicKey = Buffer.from(tempPublic.encode('hex', false), 'hex')
@@ -102,11 +104,9 @@ const derivePublic = function (curve, publicKey) {
  * @returns string(base64)
  */
 export const encrypt = async function (pub, msg) {
-    const EC = elliptic.ec
-    const curve = new EC('p256')
     const publicKey = curve.keyFromPublic(pub, 'hex')
 
-    const { ephemPublicKey, shared } = derivePublic(curve, publicKey)
+    const { ephemPublicKey, shared } = derivePublic(publicKey)
 
     const sharedHash = await sha512(shared)
 

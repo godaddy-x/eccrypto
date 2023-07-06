@@ -35,20 +35,22 @@ func hash256(msg []byte) []byte {
 	return r
 }
 
-func concat(iv, pub, text []byte) []byte {
-	ct := make([]byte, len(iv)+len(pub)+len(text))
+func concat(iv, time, pub, text []byte) []byte {
+	ct := make([]byte, len(iv)+len(time)+len(pub)+len(text))
 	copy(ct, iv)
-	copy(ct[len(iv):], pub)
-	copy(ct[len(iv)+len(pub):], text)
+	copy(ct[len(iv):], time)
+	copy(ct[len(iv)+len(time):], pub)
+	copy(ct[len(iv)+len(time)+len(pub):], text)
 	return ct
 }
 
-func concatKDF(pub, iv, mac, text []byte) []byte {
-	ct := make([]byte, len(pub)+len(iv)+len(mac)+len(text))
+func concatKDF(pub, iv, time, mac, text []byte) []byte {
+	ct := make([]byte, len(pub)+len(iv)+len(time)+len(mac)+len(text))
 	copy(ct, pub)
 	copy(ct[len(pub):], iv)
-	copy(ct[len(pub)+len(iv):], mac)
-	copy(ct[len(pub)+len(iv)+len(mac):], text)
+	copy(ct[len(pub)+len(iv):], time)
+	copy(ct[len(pub)+len(iv)+len(time):], mac)
+	copy(ct[len(pub)+len(iv)+len(time)+len(mac):], text)
 	return ct
 }
 
@@ -90,7 +92,6 @@ func aes256CbcEncrypt(iv, key, plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 对明文进行 ZeroPadding 填充
 	padded := pkcs7Padding(plaintext, block.BlockSize())
 	ciphertext := make([]byte, len(padded))
 	mode := cipher.NewCBCEncrypter(block, iv)

@@ -9,14 +9,17 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strconv"
+	"time"
 )
 
 const (
-	iLen   = 16
-	mLen   = 32
-	pLen   = 65
-	minLen = 113
-	secLen = 81
+	iLen      = 16
+	mLen      = 32
+	pLen      = 65
+	minLen    = 123
+	secondLen = 81
+	thirdLen  = 91
 )
 
 var (
@@ -176,10 +179,13 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("temp public key invalid")
 	}
-	hashData := concat(iv, ephemPublicKey, ciphertext)
+
+	timeKey := []byte(strconv.FormatInt(time.Now().Unix(), 10))
+
+	hashData := concat(iv, timeKey, ephemPublicKey, ciphertext)
 	realMac := hmac256(macKey, hashData)
 
-	return concatKDF(ephemPublicKey, iv, realMac, ciphertext), nil
+	return concatKDF(ephemPublicKey, iv, timeKey, realMac, ciphertext), nil
 }
 
 func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
@@ -204,11 +210,12 @@ func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
 	macKey := sharedKeyHash[mLen:]
 	encryptionKey := sharedKeyHash[0:mLen]
 
-	iv := msg[pLen:secLen]
-	mac := msg[secLen:minLen]
+	iv := msg[pLen:secondLen]
+	time := msg[secondLen:thirdLen]
+	mac := msg[thirdLen:minLen]
 	ciphertext := msg[minLen:]
 
-	hashData := concat(iv, ephemPublicKey, ciphertext)
+	hashData := concat(iv, time, ephemPublicKey, ciphertext)
 
 	realMac := hmac256(macKey, hashData)
 

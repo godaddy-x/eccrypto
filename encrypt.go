@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strconv"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -25,6 +26,24 @@ const (
 var (
 	defaultCurve = elliptic.P256() // default use p256
 )
+
+type DecryptRes struct {
+	Nonce     []byte
+	Time      int64
+	PublicKey []byte
+	Mac       []byte
+	Plaintext []byte
+}
+
+func bytes2string(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
+}
+
+func string2bytes(s string) []byte {
+	x := (*[2]uintptr)(unsafe.Pointer(&s))
+	h := [3]uintptr{x[0], x[1], x[1]}
+	return *(*[]byte)(unsafe.Pointer(&h))
+}
 
 func CreateECDSA() (*ecdsa.PrivateKey, error) {
 	prk, err := ecdsa.GenerateKey(defaultCurve, rand.Reader)
@@ -142,7 +161,7 @@ func GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte
 	return fillSharedKeyHex(sharedKey.Bytes()), nil
 }
 
-func Encrypt(publicTo, message []byte) ([]byte, error) {
+func Encrypt(publicTo, message []byte, key ...[]byte) ([]byte, error) {
 	if len(publicTo) != pLen {
 		return nil, errors.New("bad public key")
 	}
@@ -165,6 +184,10 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 	macKey := sharedKeyHash[mLen:]
 	encryptionKey := sharedKeyHash[0:mLen]
 
+	if len(key) > 0 {
+		macKey = hmac256(key[0], macKey)
+	}
+
 	iv, err := randomBytes(iLen)
 	if err != nil {
 		return nil, errors.New("random iv failed")
@@ -180,7 +203,7 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 		return nil, errors.New("temp public key invalid")
 	}
 
-	timeKey := []byte(strconv.FormatInt(time.Now().Unix(), 10))
+	timeKey := string2bytes(strconv.FormatInt(time.Now().Unix(), 10))
 
 	hashData := concat(iv, timeKey, ephemPublicKey, ciphertext)
 	realMac := hmac256(macKey, hashData)
@@ -188,20 +211,28 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 	return concatKDF(ephemPublicKey, iv, timeKey, realMac, ciphertext), nil
 }
 
-func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
+func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte, key ...[]byte) ([]byte, error) {
+	object, err := DecryptObject(privateKey, msg, key...)
+	if err != nil {
+		return nil, err
+	}
+	return object.Plaintext, nil
+}
+
+func DecryptObject(privateKey *ecdsa.PrivateKey, msg []byte, key ...[]byte) (DecryptRes, error) {
 	if len(msg) <= minLen {
-		return nil, errors.New("bad msg data")
+		return DecryptRes{}, errors.New("bad msg data")
 	}
 
 	ephemPublicKey := msg[0:pLen]
 	pub, err := LoadPublicKey(ephemPublicKey)
 	if err != nil {
-		return nil, errors.New("bad public key")
+		return DecryptRes{}, errors.New("bad public key")
 	}
 
 	sharedKey, _ := defaultCurve.ScalarMult(pub.X, pub.Y, privateKey.D.Bytes())
 	if sharedKey == nil || len(sharedKey.Bytes()) == 0 {
-		return nil, errors.New("shared failed")
+		return DecryptRes{}, errors.New("shared failed")
 	}
 
 	sharedKeyHex := fillSharedKeyHex(sharedKey.Bytes())
@@ -209,6 +240,10 @@ func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
 
 	macKey := sharedKeyHash[mLen:]
 	encryptionKey := sharedKeyHash[0:mLen]
+
+	if len(key) > 0 {
+		macKey = hmac256(key[0], macKey)
+	}
 
 	iv := msg[pLen:secondLen]
 	time := msg[secondLen:thirdLen]
@@ -220,12 +255,18 @@ func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
 	realMac := hmac256(macKey, hashData)
 
 	if !bytes.Equal(mac, realMac) {
-		return nil, errors.New("mac invalid")
+		return DecryptRes{}, errors.New("mac invalid")
 	}
 
 	plaintext, err := aes256CbcDecrypt(iv, encryptionKey, ciphertext)
 	if err != nil {
-		return nil, errors.New("decrypt failed")
+		return DecryptRes{}, errors.New("decrypt failed")
 	}
-	return plaintext, nil
+
+	timeNum, err := strconv.ParseInt(bytes2string(time), 10, 64)
+	if err != nil {
+		return DecryptRes{}, err
+	}
+
+	return DecryptRes{Nonce: iv, Time: timeNum, Mac: mac, Plaintext: plaintext, PublicKey: ephemPublicKey}, nil
 }

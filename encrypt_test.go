@@ -23,23 +23,28 @@ func TestCreateECDSA(t *testing.T) {
 
 func TestECCEncrypt(t *testing.T) {
 	prk, _ := CreateECDSA() // 服务端
+	//prkHex := `30770201010420c9091b7a0bf23754eac17e498ccc6d53b6c9dfd9c543afadc51dd1fdcd028ec7a00a06082a8648ce3d030107a14403420004859458088eb8233c917023ceb0d40dc42c60e3636aca6220f32abea47fbb89012c947831e19b2c3387aacac19c7ec52da35040789fd3be7a4e1cac5cb1cd4b58`
+	//prk, err := LoadHexPrivateKey(prkHex)
+
+	key := []byte("123456")
+
 	_, pubBs, _ := GetObjectBytes(prk, &prk.PublicKey)
-	r, err := Encrypt(pubBs, testMsg)
+	r, err := Encrypt(pubBs, testMsg, key)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("加密数据: ", base64.StdEncoding.EncodeToString(r))
-	r2, err := Decrypt(prk, r)
+	r2, err := DecryptObject(prk, r, key)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("解密数据: ", string(r2))
+	fmt.Println("解密数据: ", string(r2.Plaintext))
 }
 
 func TestECCDecrypt(t *testing.T) {
 	prkHex := `30770201010420c9091b7a0bf23754eac17e498ccc6d53b6c9dfd9c543afadc51dd1fdcd028ec7a00a06082a8648ce3d030107a14403420004859458088eb8233c917023ceb0d40dc42c60e3636aca6220f32abea47fbb89012c947831e19b2c3387aacac19c7ec52da35040789fd3be7a4e1cac5cb1cd4b58`
 	//pubHex := `04859458088eb8233c917023ceb0d40dc42c60e3636aca6220f32abea47fbb89012c947831e19b2c3387aacac19c7ec52da35040789fd3be7a4e1cac5cb1cd4b58`
-	data := `BFd5ZnsiyP1tffsnA1WICysQKVg9HHitFtXiqRqAvLQUkhy26HWyBGx7olVtg1Dc8+QS+kyaMxJtdYkyEcmcXvk0hG3SUhjOd0qMKQv4Q4OO4nzoTIeRu8BbEvzP39fwj+bsntiq5He7szVF54D3m3E9TJuTTYDTRKHntm0zqM3Xhy5dKGSVq69sdpzJRZWjv7GL+9DLdcRihv2Daje7v6s=`
+	data := `BH8/UnFuC+vRqYC7r/j9QrbjBs4kFTWbJAHHX5edwdHmHIpXsp1cznwYmXE532A9V3hIEidPnuzNiSRRHYrp2N/sBw7f8i912i8kclGyp3QxMTY4ODYzMzU3Nvq4UU+fs85rQV02MtOr7TRXux0we2c1guukKt6j8PdnVlOf1SMyEU9D2U2iEuCJaAQ/r+AVKBKmT1/jtFCYx9sUaimOqKNZ+yWF3TEXXkw9`
 	msg, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		panic(err)
@@ -51,7 +56,6 @@ func TestECCDecrypt(t *testing.T) {
 		return
 	}
 	fmt.Println("解密数据: ", string(r2))
-	fmt.Println(hex.EncodeToString(r2))
 }
 
 func TestECDSASharedKey(t *testing.T) {

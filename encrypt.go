@@ -21,6 +21,8 @@ const (
 
 var (
 	defaultCurve = elliptic.P256() // default use p256
+	// temp private key
+	defaultPrk, _ = CreateECDSA()
 )
 
 func CreateECDSA() (*ecdsa.PrivateKey, error) {
@@ -147,13 +149,8 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("public key invalid")
 	}
-	// temp private key
-	prk, err := CreateECDSA()
-	if err != nil {
-		return nil, err
-	}
 
-	sharedKeyHex, err := GenSharedKey(prk, pub)
+	sharedKeyHex, err := GenSharedKey(defaultPrk, pub)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +169,7 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 		return nil, errors.New("encrypt failed")
 	}
 
-	ephemPublicKey, err := GetPublicKeyBytes(&prk.PublicKey)
+	ephemPublicKey, err := GetPublicKeyBytes(&defaultPrk.PublicKey)
 	if err != nil {
 		return nil, errors.New("temp public key invalid")
 	}

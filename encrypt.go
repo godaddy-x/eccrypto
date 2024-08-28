@@ -153,14 +153,11 @@ func Encrypt(inputPrk *ecdsa.PrivateKey, publicTo, message []byte) ([]byte, erro
 	var sharedKeyHex []byte
 	if inputPrk == nil {
 		sharedKeyHex, err = GenSharedKey(defaultPrk, pub)
-		if err != nil {
-			return nil, err
-		}
 	} else {
 		sharedKeyHex, err = GenSharedKey(inputPrk, pub)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	sharedKeyHash := hash512(sharedKeyHex)
@@ -177,10 +174,16 @@ func Encrypt(inputPrk *ecdsa.PrivateKey, publicTo, message []byte) ([]byte, erro
 		return nil, errors.New("encrypt failed")
 	}
 
-	ephemPublicKey, err := GetPublicKeyBytes(&defaultPrk.PublicKey)
+	var ephemPublicKey []byte
+	if inputPrk == nil {
+		ephemPublicKey, err = GetPublicKeyBytes(&defaultPrk.PublicKey)
+	} else {
+		ephemPublicKey, err = GetPublicKeyBytes(&inputPrk.PublicKey)
+	}
 	if err != nil {
 		return nil, errors.New("temp public key invalid")
 	}
+
 	hashData := concat(iv, ephemPublicKey, ciphertext)
 	realMac := hmac256(macKey, hashData)
 

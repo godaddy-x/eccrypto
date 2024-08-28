@@ -24,7 +24,7 @@ func TestCreateECDSA(t *testing.T) {
 func TestECCEncrypt(t *testing.T) {
 	prk, _ := CreateECDSA() // 服务端
 	_, pubBs, _ := GetObjectBytes(prk, &prk.PublicKey)
-	r, err := Encrypt(pubBs, testMsg)
+	r, err := Encrypt(nil, pubBs, testMsg)
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +71,7 @@ func TestECDSASharedKey(t *testing.T) {
 		panic(err)
 	}
 	fmt.Println("共享密钥: ", string(sharedKey))
-	a, err := Encrypt(pubHex, testMsg)
+	a, err := Encrypt(nil, pubHex, testMsg)
 	if err != nil {
 		panic(err)
 	}
@@ -119,7 +119,7 @@ func BenchmarkECDSAEncrypt(b *testing.B) {
 	prk, _ := CreateECDSA() // 服务端
 	pub, _ := GetPublicKeyBytes(&prk.PublicKey)
 	for i := 0; i < b.N; i++ { //use b.N for looping
-		_, err := Encrypt(pub, testMsg)
+		_, err := Encrypt(nil, pub, testMsg)
 		if err != nil {
 			panic(err)
 		}
@@ -132,7 +132,7 @@ func BenchmarkECCDecrypt(b *testing.B) {
 	b.StartTimer()
 	prk, _ := CreateECDSA() // 服务端
 	pub, _ := GetPublicKeyBytes(&prk.PublicKey)
-	r, err := Encrypt(pub, testMsg)
+	r, err := Encrypt(nil, pub, testMsg)
 	if err != nil {
 		panic(err)
 	}

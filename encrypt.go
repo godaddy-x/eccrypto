@@ -141,7 +141,7 @@ func GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte
 	return fillSharedKeyHex(sharedKey.Bytes()), nil
 }
 
-func Encrypt(publicTo, message []byte) ([]byte, error) {
+func Encrypt(inputPrk *ecdsa.PrivateKey, publicTo, message []byte) ([]byte, error) {
 	if len(publicTo) != pLen {
 		return nil, errors.New("bad public key")
 	}
@@ -150,9 +150,17 @@ func Encrypt(publicTo, message []byte) ([]byte, error) {
 		return nil, errors.New("public key invalid")
 	}
 
-	sharedKeyHex, err := GenSharedKey(defaultPrk, pub)
-	if err != nil {
-		return nil, err
+	var sharedKeyHex []byte
+	if inputPrk == nil {
+		sharedKeyHex, err = GenSharedKey(defaultPrk, pub)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sharedKeyHex, err = GenSharedKey(inputPrk, pub)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sharedKeyHash := hash512(sharedKeyHex)

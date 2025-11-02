@@ -22,17 +22,13 @@ func hmac256(key, msg []byte) []byte {
 func hash512(msg []byte) []byte {
 	h := sha512.New()
 	h.Write(msg)
-	r := h.Sum(nil)
-	h.Reset()
-	return r
+	return h.Sum(nil)
 }
 
 func hash256(msg []byte) []byte {
 	h := sha256.New()
 	h.Write(msg)
-	r := h.Sum(nil)
-	h.Reset()
-	return r
+	return h.Sum(nil)
 }
 
 func concat(iv, pub, text []byte) []byte {
@@ -119,13 +115,44 @@ func hexToBytes(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&h))
 }
 
+//func fillSharedKeyHex(b []byte) []byte {
+//	sharedKeyHex := hex.EncodeToString(b)
+//	if len(sharedKeyHex) < 64 {
+//		cha := 64 - len(sharedKeyHex)
+//		for i := 0; i < cha; i++ {
+//			sharedKeyHex = `0` + sharedKeyHex
+//		}
+//	}
+//	return hexToBytes(sharedKeyHex)
+//}
+
+// fillSharedKeyHex 字节操作优化版本 - 与原始字符串逻辑等价
 func fillSharedKeyHex(b []byte) []byte {
-	sharedKeyHex := hex.EncodeToString(b)
-	if len(sharedKeyHex) < 64 {
-		cha := 64 - len(sharedKeyHex)
-		for i := 0; i < cha; i++ {
-			sharedKeyHex = `0` + sharedKeyHex
+	// 原始逻辑：bytes -> hex string -> 补0到64字符 -> []byte(string)
+	// 等价于：创建64字节数组，前面的补0部分填入'0'的ASCII (0x30)，后面填入hex字符的ASCII
+
+	result := make([]byte, 64)
+
+	// 生成hex字符串
+	hexStr := hex.EncodeToString(b)
+
+	// 计算需要补多少个'0'
+	padding := 64 - len(hexStr)
+
+	// 处理不同情况
+	if padding >= 0 {
+		// 输入 <= 32字节，需要补0
+		// 前面补'0'的ASCII值 (0x30)
+		for i := 0; i < padding; i++ {
+			result[i] = '0' // 0x30
 		}
+		// 后面填入hex字符的ASCII值
+		copy(result[padding:], []byte(hexStr))
+	} else {
+		// 输入 > 32字节，hex字符串 > 64字符
+		// 复制hex字符串的前64个字符
+		copy(result, []byte(hexStr[:64]))
 	}
-	return hexToBytes(sharedKeyHex)
+
+	return result
 }

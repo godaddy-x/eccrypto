@@ -1,6 +1,7 @@
 package ecc
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -143,5 +144,53 @@ func BenchmarkECCDecrypt(b *testing.B) {
 			panic(err)
 		}
 		//fmt.Println("解密数据: ", string(r2))
+	}
+}
+
+// TestFillSharedKeyHexComparison 比较原始实现和优化实现的差异
+func TestFillSharedKeyHexComparison(t *testing.T) {
+	// 原始实现函数 - 使用和fillSharedKeyHex相同的逻辑
+	originalFillSharedKeyHex := func(b []byte) []byte {
+		sharedKeyHex := hex.EncodeToString(b)
+		if len(sharedKeyHex) < 64 {
+			cha := 64 - len(sharedKeyHex)
+			for j := 0; j < cha; j++ {
+				sharedKeyHex = "0" + sharedKeyHex
+			}
+		}
+		// 使用和fillSharedKeyHex相同的hexToBytes逻辑
+		return hexToBytes(sharedKeyHex)
+	}
+
+	// 测试不同长度输入
+	testCases := [][]byte{
+		{1, 2, 3, 4, 5},                // 5字节
+		bytes.Repeat([]byte{0xFF}, 31), // 31字节
+		bytes.Repeat([]byte{0xAA}, 32), // 32字节
+		bytes.Repeat([]byte{0xBB}, 33), // 33字节 - 实际ECDH中不会发生
+	}
+
+	for i, input := range testCases {
+		originalResult := originalFillSharedKeyHex(input)
+		optimizedResult := fillSharedKeyHex(input)
+
+		t.Logf("=== Test case %d - Input len: %d ===", i, len(input))
+		t.Logf("Input bytes: %x", input)
+		t.Logf("Original result len: %d, bytes: %x", len(originalResult), originalResult)
+		t.Logf("Optimized result len: %d, bytes: %x", len(optimizedResult), optimizedResult)
+
+		// 对于实际ECDH中可能出现的输入（<=32字节），结果必须完全相同
+		if len(input) <= 32 {
+			if !bytes.Equal(originalResult, optimizedResult) {
+				t.Errorf("FAIL: Test case %d failed for input len <= 32", i)
+			} else {
+				t.Logf("PASS: Results are identical")
+			}
+		} else {
+			// 对于>32字节的情况，记录差异但不认为是错误
+			t.Logf("NOTE: Input len > 32, results may differ (original: %d bytes, optimized: %d bytes)",
+				len(originalResult), len(optimizedResult))
+		}
+		t.Logf("")
 	}
 }

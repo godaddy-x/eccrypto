@@ -65,6 +65,10 @@ func LoadPublicKey(h []byte) (*ecdsa.PublicKey, error) {
 	if x == nil || y == nil {
 		return nil, errors.New("bad point format")
 	}
+	// 验证点是否在曲线上
+	if !defaultCurve.IsOnCurve(x, y) {
+		return nil, errors.New("point not on curve")
+	}
 	return &ecdsa.PublicKey{Curve: defaultCurve, X: x, Y: y}, nil
 }
 

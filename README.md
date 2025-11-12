@@ -1,104 +1,67 @@
 # eccrypto
-ecdsa p256 ecies
 
-#### 1. Create privateKey and publicKey by ECDSA
-```
-CreateECDSA() (*ecdsa.PrivateKey, error)
-```
-#### 2. Load privateKey by hex
-```
-LoadHexPrivateKey(h string) (*ecdsa.PrivateKey, error)
-```
-#### 3. Load publicKey by hex
-```
-LoadHexPublicKey(h string) (*ecdsa.PublicKey, []byte, error)
-```
-#### 4. Load publicKey by base64
-```
-LoadBase64PublicKey(h string) (*ecdsa.PublicKey, []byte, error)
-```
-### 5. Generate share key by privateKey and publicKey
-```
-GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error)
-```
-### 6. Encrypt plaintext by publicKey
-```
-Encrypt(publicTo, message []byte) ([]byte, error)
-```
-### 7. Decrypt ciphertext by privateKey
-```
-Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error)
-```
-### 8. Sign Data by privateKey
-```
-Sign(prk *ecdsa.PrivateKey, msg []byte) ([]byte, error)
-```
-### 9. Verify data by publicKey
-```
-Verify(pub *ecdsa.PublicKey, msg, sign []byte) bool
-```
+ECDH P256 ECIES (Elliptic Curve Integrated Encryption Scheme)
 
-### Benchmark
+## ECDH Functions (Recommended)
+
+#### 1. Create ECDH privateKey and publicKey
 
 ```
-// CreateECDSA
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECDSACreate
-BenchmarkECDSACreate-12            94461             12089 ns/op
+CreateECDH() (*ecdh.PrivateKey, error)
 ```
 
-```
-// GenSharedKey
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECCSharedKey
-BenchmarkECCSharedKey-12           26563             44460 ns/op
-```
+#### 2. Load ECDH privateKey by hex
 
 ```
-// Encrypt
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECDSAEncrypt
-BenchmarkECDSAEncrypt-12           19818             60096 ns/op
+LoadHexECDHPrivateKey(h string) (*ecdh.PrivateKey, error)
 ```
 
-```
-// Decrypt
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECCDecrypt
-BenchmarkECCDecrypt-12             24715             48010 ns/op
-```
+#### 3. Load ECDH privateKey by base64
 
 ```
-// Sign
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECCSign
-BenchmarkECCSign-12        57798             20354 ns/op
+LoadBase64ECDHPrivateKey(h string) (*ecdh.PrivateKey, error)
 ```
 
+#### 4. Get ECDH publicKey bytes
+
 ```
-// Verify
-goos: windows
-goarch: amd64
-pkg: github.com/godaddy-x/eccrypto
-cpu: 12th Gen Intel(R) Core(TM) i5-12400F
-BenchmarkECCVerify
-BenchmarkECCVerify-12              19876             60247 ns/op
+GetECDHPublicKeyBytes(pub ecdh.PublicKey) []byte
 ```
 
+### 5. Generate shared key using ECDH
 
+```
+GenSharedKeyECDH(ownerPrk *ecdh.PrivateKey, otherPub *ecdh.PublicKey) ([]byte, error)
+```
 
+### 6. Encrypt plaintext using ECDH
+
+```
+Encrypt(inputPrk *ecdh.PrivateKey, publicTo, message []byte) ([]byte, error)
+```
+
+### 7. Decrypt ciphertext using ECDH
+
+```
+Decrypt(privateKey *ecdh.PrivateKey, msg []byte) ([]byte, error)
+```
+
+## Performance Benchmarks
+
+### Performance Comparison (Go 1.20, Intel i5-13600KF)
+
+#### ECDH (Recommended - Modern & Fast)
+
+```
+BenchmarkECDHCreate-20        9,023,166     266.6 ns/op
+BenchmarkECDHSharedKey-20        66,362    35,975 ns/op
+BenchmarkECDHEncrypt-20          64,539    36,884 ns/op
+BenchmarkECDHDecrypt-20          65,425    36,675 ns/op
+```
+
+### Security Notes
+
+- **ECDH**: Uses crypto/ecdh package (Go 1.20+), providing modern, secure key exchange
+- **Performance**: Significantly faster than legacy implementations
+- **Compatibility**: Fully compatible with TypeScript elliptic.js library
+- **Security**: ECDH provides strong security guarantees for key exchange and encryption

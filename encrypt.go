@@ -2,226 +2,204 @@ package ecc
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"crypto/ecdh"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 )
 
 const (
-	iLen   = 16
-	mLen   = 32
-	pLen   = 65
-	minLen = 113
-	secLen = 81
+	// ECDH 相关常量
+	ecdhPubKeyLen = 65 // ECDH 公钥长度 (未压缩格式: 1字节前缀 + 32字节X + 32字节Y)
+
+	// 加密相关常量
+	ivLen  = 16 // IV 长度 (AES 块大小)
+	macLen = 32 // MAC 长度 (HMAC-SHA256)
+	keyLen = 32 // 加密密钥长度 (AES-256)
 )
 
 var (
-	defaultCurve = elliptic.P256() // default use p256
-	// temp private key
-	defaultPrk, _ = CreateECDSA()
+	ecdhCurve = ecdh.P256() // ECDH curve for key exchange
 )
 
-func CreateECDSA() (*ecdsa.PrivateKey, error) {
-	prk, err := ecdsa.GenerateKey(defaultCurve, rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	return prk, nil
+// CreateECDH 生成新的ECDH私钥，用于密钥交换
+func CreateECDH() (*ecdh.PrivateKey, error) {
+	return ecdhCurve.GenerateKey(rand.Reader)
 }
 
-func LoadHexPrivateKey(h string) (*ecdsa.PrivateKey, error) {
+// LoadHexECDHPrivateKey 从十六进制字符串加载ECDH私钥
+func LoadHexECDHPrivateKey(h string) (*ecdh.PrivateKey, error) {
 	b, err := hex.DecodeString(h)
 	if err != nil {
-		return nil, errors.New("bad private key")
+		return nil, errors.New("bad ECDH private key")
 	}
-	prk, err := x509.ParseECPrivateKey(b)
-	if err != nil {
-		return nil, errors.New("parse private key failed")
-	}
-	return prk, nil
+	return ecdhCurve.NewPrivateKey(b)
 }
 
-func LoadBase64PrivateKey(h string) (*ecdsa.PrivateKey, error) {
+// LoadBase64ECDHPrivateKey 从Base64字符串加载ECDH私钥
+func LoadBase64ECDHPrivateKey(h string) (*ecdh.PrivateKey, error) {
 	b, err := base64.StdEncoding.DecodeString(h)
 	if err != nil {
-		return nil, errors.New("bad private key")
+		return nil, errors.New("bad ECDH private key")
 	}
-	prk, err := x509.ParseECPrivateKey(b)
-	if err != nil {
-		return nil, errors.New("parse private key failed")
-	}
-	return prk, nil
+	return ecdhCurve.NewPrivateKey(b)
 }
 
-func LoadPublicKey(h []byte) (*ecdsa.PublicKey, error) {
-	if len(h) != pLen {
-		return nil, errors.New("publicKey invalid")
-	}
-	x, y := elliptic.Unmarshal(defaultCurve, h)
-	if x == nil || y == nil {
-		return nil, errors.New("bad point format")
-	}
-	// 验证点是否在曲线上
-	if !defaultCurve.IsOnCurve(x, y) {
-		return nil, errors.New("point not on curve")
-	}
-	return &ecdsa.PublicKey{Curve: defaultCurve, X: x, Y: y}, nil
+// LoadECDHPrivateKey 从字节数组加载ECDH私钥
+func LoadECDHPrivateKey(b []byte) (*ecdh.PrivateKey, error) {
+	return ecdhCurve.NewPrivateKey(b)
 }
 
-func LoadBase64PublicKey(b64 string) (*ecdsa.PublicKey, []byte, error) {
-	b, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, nil, err
-	}
-	pub, err := LoadPublicKey(b)
-	if err != nil {
-		return nil, nil, err
-	}
-	pubBs := elliptic.Marshal(defaultCurve, pub.X, pub.Y)
-	return pub, pubBs, nil
-}
-
-func LoadHexPublicKey(h string) (*ecdsa.PublicKey, []byte, error) {
+// LoadECDHPrivateKeyFromHex 从十六进制字符串加载ECDH私钥
+func LoadECDHPrivateKeyFromHex(h string) (*ecdh.PrivateKey, error) {
 	b, err := hex.DecodeString(h)
 	if err != nil {
-		return nil, nil, err
+		return nil, errors.New("bad ECDH private key hex")
 	}
-	pub, err := LoadPublicKey(b)
-	if err != nil {
-		return nil, nil, err
-	}
-	pubBs := elliptic.Marshal(defaultCurve, pub.X, pub.Y)
-	return pub, pubBs, nil
+	return ecdhCurve.NewPrivateKey(b)
 }
 
-func GetPublicKeyBytes(pub *ecdsa.PublicKey) ([]byte, error) {
-	_, pubBs, err := GetObjectBytes(nil, pub)
+// LoadECDHPrivateKeyFromBase64 从Base64字符串加载ECDH私钥
+func LoadECDHPrivateKeyFromBase64(b64 string) (*ecdh.PrivateKey, error) {
+	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("bad ECDH private key base64")
 	}
-	return pubBs, nil
+	return ecdhCurve.NewPrivateKey(b)
 }
 
-func GetObjectBytes(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) ([]byte, []byte, error) {
-	var err error
-	var prkBs, pubBs []byte
-	if prk != nil {
-		prkBs, err = x509.MarshalECPrivateKey(prk)
+// LoadECDHPublicKey 从字节数组加载ECDH公钥
+// 接受未压缩格式的公钥，这是 crypto/ecdh.PublicKey.Bytes() 的输出格式
+func LoadECDHPublicKey(b []byte) (*ecdh.PublicKey, error) {
+	if len(b) != ecdhPubKeyLen {
+		return nil, errors.New("invalid ECDH public key length, expected 65 bytes")
+	}
+	return ecdhCurve.NewPublicKey(b)
+}
+
+// LoadECDHPublicKeyFromHex 从十六进制字符串加载ECDH公钥
+func LoadECDHPublicKeyFromHex(h string) (*ecdh.PublicKey, error) {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		return nil, errors.New("bad ECDH public key hex")
+	}
+	return ecdhCurve.NewPublicKey(b)
+}
+
+// LoadECDHPublicKeyFromBase64 从Base64字符串加载ECDH公钥
+func LoadECDHPublicKeyFromBase64(b64 string) (*ecdh.PublicKey, error) {
+	b, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, errors.New("bad ECDH public key base64")
+	}
+	return ecdhCurve.NewPublicKey(b)
+}
+
+// GetECDHPublicKeyBytes 获取ECDH公钥的字节表示
+func GetECDHPublicKeyBytes(pub ecdh.PublicKey) []byte {
+	return pub.Bytes()
+}
+
+// GetECDHPrivateKeyBytes 获取ECDH私钥的字节表示
+func GetECDHPrivateKeyBytes(prk *ecdh.PrivateKey) []byte {
+	return prk.Bytes()
+}
+
+// GenSharedKeyECDH 使用ECDH进行密钥交换（推荐的新版本）
+func GenSharedKeyECDH(ownerPrk *ecdh.PrivateKey, otherPub *ecdh.PublicKey) ([]byte, error) {
+	sharedKey, err := ownerPrk.ECDH(otherPub)
+	if err != nil {
+		return nil, errors.New("ECDH key exchange failed: " + err.Error())
+	}
+	return fillSharedKeyHex(sharedKey), nil
+}
+
+// Encrypt 使用ECDH进行加密（推荐的新版本）
+func Encrypt(inputPrk *ecdh.PrivateKey, publicTo, message []byte) ([]byte, error) {
+	if len(publicTo) != ecdhPubKeyLen {
+		return nil, errors.New("invalid ECDH public key length, expected 65 bytes")
+	}
+
+	// 加载接收方的ECDH公钥
+	pub, err := LoadECDHPublicKey(publicTo)
+	if err != nil {
+		return nil, errors.New("ECDH public key invalid: " + err.Error())
+	}
+
+	// 如果没有提供私钥，生成临时密钥
+	if inputPrk == nil {
+		inputPrk, err = CreateECDH()
 		if err != nil {
-			return nil, nil, err
+			return nil, errors.New("create temp ECDH key failed: " + err.Error())
 		}
 	}
-	if pub != nil {
-		pubBs = elliptic.Marshal(defaultCurve, pub.X, pub.Y)
-	}
-	return prkBs, pubBs, nil
-}
 
-func GetObjectBase64(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (string, string, error) {
-	prkBs, pubBs, err := GetObjectBytes(prk, pub)
-	if err != nil {
-		return "", "", err
-	}
-	return base64.StdEncoding.EncodeToString(prkBs), base64.StdEncoding.EncodeToString(pubBs), nil
-}
-
-func GetObjectHex(prk *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (string, string, error) {
-	prkBs, pubBs, err := GetObjectBytes(prk, pub)
-	if err != nil {
-		return "", "", err
-	}
-	return hex.EncodeToString(prkBs), hex.EncodeToString(pubBs), nil
-}
-
-func GenSharedKey(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error) {
-	sharedKey, _ := defaultCurve.ScalarMult(otherPub.X, otherPub.Y, ownerPrk.D.Bytes())
-	if sharedKey == nil || len(sharedKey.Bytes()) == 0 {
-		return nil, errors.New("shared failed")
-	}
-	return fillSharedKeyHex(sharedKey.Bytes()), nil
-}
-
-func Encrypt(inputPrk *ecdsa.PrivateKey, publicTo, message []byte) ([]byte, error) {
-	if len(publicTo) != pLen {
-		return nil, errors.New("bad public key")
-	}
-	pub, err := LoadPublicKey(publicTo)
-	if err != nil {
-		return nil, errors.New("public key invalid")
-	}
-
-	var sharedKeyHex []byte
-	if inputPrk == nil {
-		sharedKeyHex, err = GenSharedKey(defaultPrk, pub)
-	} else {
-		sharedKeyHex, err = GenSharedKey(inputPrk, pub)
-	}
+	// 生成共享密钥
+	sharedKeyHex, err := GenSharedKeyECDH(inputPrk, pub)
 	if err != nil {
 		return nil, err
 	}
 
-	sharedKeyHash := hash512(sharedKeyHex)
-	macKey := sharedKeyHash[mLen:]
-	encryptionKey := sharedKeyHash[0:mLen]
+	// 使用共享密钥进行加密（复用现有逻辑）
+	return encryptWithSharedKey(sharedKeyHex, GetECDHPublicKeyBytes(*inputPrk.PublicKey()), message)
+}
 
-	iv, err := randomBytes(iLen)
+// encryptWithSharedKey 使用给定的共享密钥和临时公钥进行加密的核心逻辑
+func encryptWithSharedKey(sharedKeyHex, ephemPublicKey, message []byte) ([]byte, error) {
+	sharedKeyHash := hash512(sharedKeyHex)
+	macKey := sharedKeyHash[keyLen:]
+	encryptionKey := sharedKeyHash[0:keyLen]
+
+	iv, err := randomBytes(ivLen)
 	if err != nil {
-		return nil, errors.New("random iv failed")
+		return nil, errors.New("random iv failed: " + err.Error())
 	}
 
 	ciphertext, err := aes256CbcEncrypt(iv, encryptionKey, message)
 	if err != nil {
-		return nil, errors.New("encrypt failed")
+		return nil, errors.New("encrypt failed: " + err.Error())
 	}
 
-	var ephemPublicKey []byte
-	if inputPrk == nil {
-		ephemPublicKey, err = GetPublicKeyBytes(&defaultPrk.PublicKey)
-	} else {
-		ephemPublicKey, err = GetPublicKeyBytes(&inputPrk.PublicKey)
-	}
-	if err != nil {
-		return nil, errors.New("temp public key invalid")
-	}
-
-	hashData := concat(iv, ephemPublicKey, ciphertext)
+	hashData := mergeMessage(ephemPublicKey, iv, ciphertext)
 	realMac := hmac256(macKey, hashData)
 
-	return concatKDF(ephemPublicKey, iv, realMac, ciphertext), nil
+	return concatMessage(ephemPublicKey, iv, realMac, ciphertext), nil
 }
 
-func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
-	if len(msg) <= minLen {
+// Decrypt 使用ECDH进行解密
+func Decrypt(privateKey *ecdh.PrivateKey, msg []byte) ([]byte, error) {
+	// ECDH使用不同的消息格式：公钥 + IV + MAC + 密文
+	ecdhMsgMinLen := ecdhPubKeyLen + ivLen + macLen // ECDH公钥 + IV + MAC
+
+	if len(msg) <= ecdhMsgMinLen {
 		return nil, errors.New("bad msg data")
 	}
 
-	ephemPublicKey := msg[0:pLen]
-	pub, err := LoadPublicKey(ephemPublicKey)
+	ephemPublicKey := msg[0:ecdhPubKeyLen]
+	pub, err := LoadECDHPublicKey(ephemPublicKey)
 	if err != nil {
-		return nil, errors.New("bad public key")
+		return nil, errors.New("bad ECDH public key: " + err.Error())
 	}
 
-	sharedKey, _ := defaultCurve.ScalarMult(pub.X, pub.Y, privateKey.D.Bytes())
-	if sharedKey == nil || len(sharedKey.Bytes()) == 0 {
-		return nil, errors.New("shared failed")
+	// 使用ECDH生成共享密钥
+	sharedKey, err := privateKey.ECDH(pub)
+	if err != nil {
+		return nil, errors.New("ECDH key exchange failed: " + err.Error())
 	}
 
-	sharedKeyHex := fillSharedKeyHex(sharedKey.Bytes())
+	sharedKeyHex := fillSharedKeyHex(sharedKey)
+
+	// 使用共享密钥进行解密
 	sharedKeyHash := hash512(sharedKeyHex)
+	macKey := sharedKeyHash[keyLen:]
+	encryptionKey := sharedKeyHash[0:keyLen]
 
-	macKey := sharedKeyHash[mLen:]
-	encryptionKey := sharedKeyHash[0:mLen]
+	iv := msg[ecdhPubKeyLen : ecdhPubKeyLen+ivLen]               // IV 部分
+	mac := msg[ecdhPubKeyLen+ivLen : ecdhPubKeyLen+ivLen+macLen] // MAC 部分
+	ciphertext := msg[ecdhPubKeyLen+ivLen+macLen:]               // 密文部分
 
-	iv := msg[pLen:secLen]
-	mac := msg[secLen:minLen]
-	ciphertext := msg[minLen:]
-
-	hashData := concat(iv, ephemPublicKey, ciphertext)
-
+	hashData := mergeMessage(ephemPublicKey, iv, ciphertext)
 	realMac := hmac256(macKey, hashData)
 
 	if !bytes.Equal(mac, realMac) {
@@ -230,7 +208,7 @@ func Decrypt(privateKey *ecdsa.PrivateKey, msg []byte) ([]byte, error) {
 
 	plaintext, err := aes256CbcDecrypt(iv, encryptionKey, ciphertext)
 	if err != nil {
-		return nil, errors.New("decrypt failed")
+		return nil, errors.New("decrypt failed: " + err.Error())
 	}
 	return plaintext, nil
 }

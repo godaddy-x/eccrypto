@@ -37,13 +37,13 @@ GenSharedKeyECDH(ownerPrk *ecdh.PrivateKey, otherPub *ecdh.PublicKey) ([]byte, e
 ### 6. Encrypt plaintext using ECDH
 
 ```
-Encrypt(inputPrk *ecdh.PrivateKey, publicTo, message []byte) ([]byte, error)
+Encrypt(inputPrk *ecdh.PrivateKey, publicTo, message, additionalData []byte) ([]byte, error)
 ```
 
 ### 7. Decrypt ciphertext using ECDH
 
 ```
-Decrypt(privateKey *ecdh.PrivateKey, msg []byte) ([]byte, error)
+Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData []byte) ([]byte, error)
 ```
 
 ## Performance Benchmarks
@@ -65,3 +65,4 @@ BenchmarkECDHDecrypt-20          65,425    36,675 ns/op
 - **Performance**: Significantly faster than legacy implementations
 - **Compatibility**: Fully compatible with TypeScript elliptic.js library
 - **Security**: ECDH provides strong security guarantees for key exchange and encryption
+- **Note**: ECDH does not support digital signatures - use ECDSA for signing/verification

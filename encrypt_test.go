@@ -3,6 +3,7 @@ package ecc
 import (
 	"bytes"
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
@@ -46,7 +47,7 @@ func BenchmarkECDHEncrypt(b *testing.B) {
 	pubBytes := GetECDHPublicKeyBytes(*prk.PublicKey())
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := Encrypt(prk, pubBytes, testMsg)
+		_, err := Encrypt(prk, pubBytes, testMsg, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -60,13 +61,13 @@ func BenchmarkECDHDecrypt(b *testing.B) {
 		panic(err)
 	}
 	pubBytes := GetECDHPublicKeyBytes(*prk.PublicKey())
-	r, err := Encrypt(prk, pubBytes, testMsg)
+	r, err := Encrypt(prk, pubBytes, testMsg, nil)
 	if err != nil {
 		panic(err)
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := Decrypt(prk, r)
+		_, err := Decrypt(prk, r, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -88,13 +89,13 @@ func TestECDHEncryptDecrypt(t *testing.T) {
 	testMsg := []byte("Hello, ECDH encryption!")
 
 	// 加密
-	encrypted, err := Encrypt(prk, pubBytes, testMsg)
+	encrypted, err := Encrypt(prk, pubBytes, testMsg, nil)
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
 	}
 
 	// 解密
-	decrypted, err := Decrypt(prk, encrypted)
+	decrypted, err := Decrypt(prk, encrypted, nil)
 	if err != nil {
 		t.Fatalf("Decrypt failed: %v", err)
 	}
@@ -139,12 +140,12 @@ func TestECDHBasic(t *testing.T) {
 
 	// 测试加密解密
 	testMsg := []byte("Hello, ECDH encryption!")
-	encrypted, err := Encrypt(alicePrk, GetECDHPublicKeyBytes(*bobPrk.PublicKey()), testMsg)
+	encrypted, err := Encrypt(alicePrk, GetECDHPublicKeyBytes(*bobPrk.PublicKey()), testMsg, nil)
 	if err != nil {
 		t.Fatalf("Encryption failed: %v", err)
 	}
 
-	decrypted, err := Decrypt(bobPrk, encrypted)
+	decrypted, err := Decrypt(bobPrk, encrypted, nil)
 	if err != nil {
 		t.Fatalf("Decryption failed: %v", err)
 	}
@@ -219,12 +220,12 @@ func TestTypeScriptCompatibility(t *testing.T) {
 
 		// 测试实际加密解密
 		testMsg := []byte("Hello from TypeScript compatible format!")
-		encrypted, err := Encrypt(goPrk, tsFormatPubKey, testMsg)
+		encrypted, err := Encrypt(goPrk, tsFormatPubKey, testMsg, nil)
 		if err != nil {
 			t.Fatalf("Encryption with TypeScript format failed: %v", err)
 		}
 
-		decrypted, err := Decrypt(goPrk, encrypted)
+		decrypted, err := Decrypt(goPrk, encrypted, nil)
 		if err != nil {
 			t.Fatalf("Decryption failed: %v", err)
 		}
@@ -284,13 +285,13 @@ func TestTypeScriptCompatibility(t *testing.T) {
 
 		// 验证Go的Encrypt能接受这个格式
 		testMsg := []byte("Message from TypeScript to Go")
-		encrypted, err := Encrypt(goPrk, tsCompatiblePubKey, testMsg)
+		encrypted, err := Encrypt(goPrk, tsCompatiblePubKey, testMsg, nil)
 		if err != nil {
 			t.Fatalf("Encrypt with TypeScript key failed: %v", err)
 		}
 
 		// 验证解密
-		decrypted, err := Decrypt(tempPrk, encrypted)
+		decrypted, err := Decrypt(tempPrk, encrypted, nil)
 		if err != nil {
 			t.Fatalf("Decrypt failed: %v", err)
 		}
@@ -303,51 +304,107 @@ func TestTypeScriptCompatibility(t *testing.T) {
 	})
 }
 
-// TestFillSharedKeyHexComparison 比较原始实现和优化实现的差异
-func TestFillSharedKeyHexComparison(t *testing.T) {
-	// 原始实现函数 - 使用和fillSharedKeyHex相同的逻辑
-	originalFillSharedKeyHex := func(b []byte) []byte {
-		sharedKeyHex := hex.EncodeToString(b)
-		const sharedKeyHexLen = 64
-		if len(sharedKeyHex) < sharedKeyHexLen {
-			cha := sharedKeyHexLen - len(sharedKeyHex)
-			for j := 0; j < cha; j++ {
-				sharedKeyHex = "0" + sharedKeyHex
-			}
-		}
-		// 使用和fillSharedKeyHex相同的hexToBytes逻辑
-		return hexToBytes(sharedKeyHex)
+// TestSecurityVulnerabilities 测试安全漏洞和边界情况
+func TestSecurityVulnerabilities(t *testing.T) {
+	// 测试用例：边界情况和潜在漏洞
+	testCases := []struct {
+		name        string
+		input       []byte
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "Empty message",
+			input:       []byte{},
+			expectError: true,
+			errorMsg:    "bad msg data",
+		},
+		{
+			name:        "Too short message",
+			input:       make([]byte, 64), // < 65 + 32 = 97
+			expectError: true,
+			errorMsg:    "bad msg data",
+		},
+		{
+			name:        "Invalid public key format",
+			input:       append(make([]byte, 65), make([]byte, 50)...), // 65 + 50 = 115, but no HMAC
+			expectError: true,
+		},
+		{
+			name:        "Minimum valid length",
+			input:       make([]byte, 97), // 65 + 32 = 97 (最小长度)
+			expectError: true,             // 应该失败，因为公钥无效
+		},
 	}
 
-	// 测试不同长度输入
-	testCases := [][]byte{
-		{1, 2, 3, 4, 5},                // 5字节
-		bytes.Repeat([]byte{0xFF}, 31), // 31字节
-		bytes.Repeat([]byte{0xAA}, 32), // 32字节
-		bytes.Repeat([]byte{0xBB}, 33), // 33字节 - 实际ECDH中不会发生
+	prk, err := CreateECDH()
+	if err != nil {
+		t.Fatalf("CreateECDH failed: %v", err)
 	}
 
-	for i, input := range testCases {
-		originalResult := originalFillSharedKeyHex(input)
-		optimizedResult := fillSharedKeyHex(input)
-
-		t.Logf("=== Test case %d - Input len: %d ===", i, len(input))
-		t.Logf("Input bytes: %x", input)
-		t.Logf("Original result len: %d, bytes: %x", len(originalResult), originalResult)
-		t.Logf("Optimized result len: %d, bytes: %x", len(optimizedResult), optimizedResult)
-
-		// 对于实际ECDH中可能出现的输入（<=32字节），结果必须完全相同
-		if len(input) <= 32 {
-			if !bytes.Equal(originalResult, optimizedResult) {
-				t.Errorf("FAIL: Test case %d failed for input len <= 32", i)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decrypt(prk, tc.input, nil)
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for %s, but got none", tc.name)
+				} else if tc.errorMsg != "" && !strings.Contains(err.Error(), tc.errorMsg) {
+					t.Errorf("Expected error message to contain '%s', got '%s'", tc.errorMsg, err.Error())
+				}
 			} else {
-				t.Logf("PASS: Results are identical")
+				if err != nil {
+					t.Errorf("Expected no error for %s, but got: %v", tc.name, err)
+				}
 			}
-		} else {
-			// 对于>32字节的情况，记录差异但不认为是错误
-			t.Logf("NOTE: Input len > 32, results may differ (original: %d bytes, optimized: %d bytes)",
-				len(originalResult), len(optimizedResult))
-		}
-		t.Logf("")
+		})
 	}
+
+	// 测试 Encrypt 的边界情况
+	t.Run("Encrypt with nil private key", func(t *testing.T) {
+		pub := GetECDHPublicKeyBytes(*prk.PublicKey())
+		message := []byte("test message")
+
+		result, err := Encrypt(nil, pub, message, nil)
+		if err != nil {
+			t.Errorf("Encrypt with nil private key should work, got error: %v", err)
+		}
+		if len(result) == 0 {
+			t.Error("Encrypt should return non-empty result")
+		}
+	})
+
+	t.Run("Encrypt with invalid public key length", func(t *testing.T) {
+		invalidPub := make([]byte, 64) // 不是 65 字节
+		message := []byte("test")
+
+		_, err := Encrypt(prk, invalidPub, message, nil)
+		if err == nil {
+			t.Error("Expected error for invalid public key length")
+		}
+		if !strings.Contains(err.Error(), "expected 65 bytes") {
+			t.Errorf("Expected specific error message, got: %s", err.Error())
+		}
+	})
+
+	t.Run("Encrypt with empty message", func(t *testing.T) {
+		pub := GetECDHPublicKeyBytes(*prk.PublicKey())
+		message := []byte{}
+
+		result, err := Encrypt(prk, pub, message, nil)
+		if err != nil {
+			t.Errorf("Encrypt with empty message should work, got error: %v", err)
+		}
+		if len(result) == 0 {
+			t.Error("Encrypt should return non-empty result even for empty message")
+		}
+
+		// 验证能正确解密
+		decrypted, err := Decrypt(prk, result, nil)
+		if err != nil {
+			t.Errorf("Decrypt failed: %v", err)
+		}
+		if len(decrypted) != 0 {
+			t.Errorf("Expected empty result, got %d bytes", len(decrypted))
+		}
+	})
 }

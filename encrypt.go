@@ -106,13 +106,13 @@ func GetECDHPrivateKeyBytes(prk *ecdh.PrivateKey) []byte {
 	return prk.Bytes()
 }
 
-// GenSharedKeyECDH 使用ECDH进行密钥交换（推荐的新版本）
+// GenSharedKeyECDH 使用ECDH进行密钥交换（推荐的新版本）不再使用hex格式
 func GenSharedKeyECDH(ownerPrk *ecdh.PrivateKey, otherPub *ecdh.PublicKey) ([]byte, error) {
 	sharedKey, err := ownerPrk.ECDH(otherPub)
 	if err != nil {
 		return nil, errors.New("ECDH key exchange failed: " + err.Error())
 	}
-	return fillSharedKeyHex(sharedKey), nil
+	return sharedKey, nil
 }
 
 // Encrypt 使用ECDH进行加密（推荐的新版本）
@@ -136,18 +136,18 @@ func Encrypt(inputPrk *ecdh.PrivateKey, publicTo, message []byte) ([]byte, error
 	}
 
 	// 生成共享密钥
-	sharedKeyHex, err := GenSharedKeyECDH(inputPrk, pub)
+	sharedKey, err := GenSharedKeyECDH(inputPrk, pub)
 	if err != nil {
 		return nil, err
 	}
 
 	// 使用共享密钥进行加密（复用现有逻辑）
-	return encryptWithSharedKey(sharedKeyHex, GetECDHPublicKeyBytes(*inputPrk.PublicKey()), message)
+	return encryptWithSharedKey(sharedKey, GetECDHPublicKeyBytes(*inputPrk.PublicKey()), message)
 }
 
 // encryptWithSharedKey 使用给定的共享密钥和临时公钥进行加密的核心逻辑
-func encryptWithSharedKey(sharedKeyHex, ephemPublicKey, message []byte) ([]byte, error) {
-	sharedKeyHash := hash512(sharedKeyHex)
+func encryptWithSharedKey(sharedKey, ephemPublicKey, message []byte) ([]byte, error) {
+	sharedKeyHash := hash512(sharedKey)
 	macKey := sharedKeyHash[keyLen:]
 	encryptionKey := sharedKeyHash[0:keyLen]
 
@@ -188,10 +188,10 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg []byte) ([]byte, error) {
 		return nil, errors.New("ECDH key exchange failed: " + err.Error())
 	}
 
-	sharedKeyHex := fillSharedKeyHex(sharedKey)
+	//sharedKey := fillSharedKey(sharedKey)
 
 	// 使用共享密钥进行解密
-	sharedKeyHash := hash512(sharedKeyHex)
+	sharedKeyHash := hash512(sharedKey)
 	macKey := sharedKeyHash[keyLen:]
 	encryptionKey := sharedKeyHash[0:keyLen]
 

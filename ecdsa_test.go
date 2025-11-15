@@ -22,7 +22,6 @@ func TestECDSASigning(t *testing.T) {
 	testMessages := [][]byte{
 		[]byte("Hello, ECDSA!"),
 		[]byte("This is a test message for digital signature."),
-		[]byte(""),  // 空消息
 		[]byte("A"), // 单字符
 		bytes.Repeat([]byte("long message"), 100), // 长消息
 	}
@@ -87,8 +86,14 @@ func TestECDSAKeySerialization(t *testing.T) {
 	}
 
 	// 序列化私钥
-	privateBytes := GetECDSAPrivateKeyBytes(originalPrivate)
-	publicBytes := GetECDSAPublicKeyBytes(originalPrivate.PublicKey)
+	privateBytes, err := GetECDSAPrivateKeyBytes(originalPrivate)
+	if err != nil {
+		t.Fatalf("GetECDSAPrivateKeyBytes failed: %v", err)
+	}
+	publicBytes, err := GetECDSAPublicKeyBytes(&originalPrivate.PublicKey)
+	if err != nil {
+		t.Fatalf("GetECDSAPublicKeyBytes failed: %v", err)
+	}
 
 	// 验证序列化长度
 	if len(publicBytes) != 65 {

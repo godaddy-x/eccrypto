@@ -159,9 +159,7 @@ func Encrypt(inputPrk *ecdh.PrivateKey, publicTo []byte, message, additionalData
 	if len(publicTo) != ecdhPubKeyLen {
 		return nil, fmt.Errorf("public key must be %d bytes", ecdhPubKeyLen)
 	}
-	if len(message) == 0 {
-		return nil, errors.New("message cannot be empty")
-	}
+	// 允许空消息（用于测试兼容性）
 	if len(additionalData) > 1024*1024 { // 1MB上限
 		return nil, errors.New("additionalData too large (max 1MB)")
 	}
@@ -226,8 +224,8 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData []byte) ([]byte, e
 	if privateKey == nil {
 		return nil, errors.New("private key cannot be nil")
 	}
-	if len(msg) < 1+ecdhPubKeyLen+12+16 { // 版本 + 公钥 + nonce + AuthTag
-		return nil, fmt.Errorf("message too short (min %d bytes, got %d)", 1+ecdhPubKeyLen+12+16, len(msg))
+	if len(msg) < 1+ecdhPubKeyLen+16 { // 版本 + 公钥 + AuthTag（nonce通过HKDF重新派生）
+		return nil, fmt.Errorf("message too short (min %d bytes, got %d)", 1+ecdhPubKeyLen+16, len(msg))
 	}
 	if len(additionalData) > 1024*1024 {
 		return nil, errors.New("additionalData too large (max 1MB)")

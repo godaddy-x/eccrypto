@@ -255,9 +255,9 @@ func TestSecurityVulnerabilities(t *testing.T) {
 		expectError bool
 		errorMsg    string
 	}{
-		{"Too short message", make([]byte, 96), true, "public key must be 65 bytes"},
-		{"Invalid public key format", make([]byte, 97), true, "public key must be 65 bytes"},
-		{"Minimum valid length", make([]byte, 97), true, "public key must be 65 bytes"},
+		{"Too short message", make([]byte, 50), true, "message too short"},
+		{"Invalid protocol version", append([]byte{0x00}, make([]byte, 81)...), true, "unsupported protocol version"},
+		{"Invalid public key format", append(append([]byte{0x01}, make([]byte, 64)...), make([]byte, 17)...), true, "public key must be 65 bytes"},
 	}
 
 	for _, tc := range testCases {

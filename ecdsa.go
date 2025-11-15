@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 )
 
 const (
@@ -21,22 +20,23 @@ const (
 )
 
 var (
-	ecdsaCurve       = elliptic.P256()       // 使用P256曲线
-	ecdsaCurveN      = ecdsaCurve.Params().N // 曲线阶(n)，用于私钥和签名验证
-	createECDSAMutex sync.Mutex              // 保护ECDSA密钥生成并发安全
+	ecdsaCurve  = elliptic.P256()       // 使用P256曲线
+	ecdsaCurveN = ecdsaCurve.Params().N // 曲线阶(n)，用于私钥和签名验证
 )
 
 // CreateECDSA 生成新的ECDSA密钥对，用于数字签名
 // 使用互斥锁确保并发安全
 func CreateECDSA() (*ecdsa.PrivateKey, error) {
-	createECDSAMutex.Lock()
-	defer createECDSAMutex.Unlock()
 	return ecdsa.GenerateKey(ecdsaCurve, rand.Reader)
 }
 
 // LoadECDSAPrivateKey 从字节数组加载ECDSA私钥
 // 输入必须是32字节的私钥标量D
 func LoadECDSAPrivateKey(b []byte) (*ecdsa.PrivateKey, error) {
+	if len(b) == 0 {
+		return nil, errors.New("private key data is empty")
+	}
+
 	// 检查私钥长度（P256私钥固定32字节）
 	if len(b) != ecdsaPrivKeyLen {
 		return nil, fmt.Errorf("invalid private key length: got %d bytes, expected %d", len(b), ecdsaPrivKeyLen)
@@ -64,6 +64,9 @@ func LoadECDSAPrivateKey(b []byte) (*ecdsa.PrivateKey, error) {
 
 // LoadECDSAPrivateKeyFromHex 从十六进制字符串加载ECDSA私钥
 func LoadECDSAPrivateKeyFromHex(h string) (*ecdsa.PrivateKey, error) {
+	if h == "" {
+		return nil, errors.New("private key hex string is empty")
+	}
 	b, err := hex.DecodeString(h)
 	if err != nil {
 		return nil, fmt.Errorf("invalid private key hex: %w", err)
@@ -73,6 +76,9 @@ func LoadECDSAPrivateKeyFromHex(h string) (*ecdsa.PrivateKey, error) {
 
 // LoadECDSAPrivateKeyFromBase64 从Base64字符串加载ECDSA私钥
 func LoadECDSAPrivateKeyFromBase64(b64 string) (*ecdsa.PrivateKey, error) {
+	if b64 == "" {
+		return nil, errors.New("private key base64 string is empty")
+	}
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid private key base64: %w", err)
@@ -83,6 +89,9 @@ func LoadECDSAPrivateKeyFromBase64(b64 string) (*ecdsa.PrivateKey, error) {
 // LoadECDSAPublicKey 从字节数组加载ECDSA公钥
 // 接受未压缩格式：0x04 + 32字节X + 32字节Y
 func LoadECDSAPublicKey(b []byte) (*ecdsa.PublicKey, error) {
+	if len(b) == 0 {
+		return nil, errors.New("public key data is empty")
+	}
 	if len(b) != ecdsaPubKeyLen || b[0] != 0x04 {
 		return nil, fmt.Errorf("invalid uncompressed public key: must be %d bytes starting with 0x04", ecdsaPubKeyLen)
 	}
@@ -90,15 +99,15 @@ func LoadECDSAPublicKey(b []byte) (*ecdsa.PublicKey, error) {
 	x := new(big.Int).SetBytes(b[1:33])
 	y := new(big.Int).SetBytes(b[33:65])
 
+	// 验证公钥是否在曲线上（使用曲线对象而不是公钥对象）
+	if !ecdsaCurve.IsOnCurve(x, y) {
+		return nil, errors.New("public key is not on P256 curve")
+	}
+
 	publicKey := &ecdsa.PublicKey{
 		Curve: ecdsaCurve,
 		X:     x,
 		Y:     y,
-	}
-
-	// 验证公钥是否在曲线上
-	if !publicKey.IsOnCurve(x, y) {
-		return nil, errors.New("public key is not on P256 curve")
 	}
 
 	return publicKey, nil
@@ -106,6 +115,9 @@ func LoadECDSAPublicKey(b []byte) (*ecdsa.PublicKey, error) {
 
 // LoadECDSAPublicKeyFromHex 从十六进制字符串加载ECDSA公钥
 func LoadECDSAPublicKeyFromHex(h string) (*ecdsa.PublicKey, error) {
+	if h == "" {
+		return nil, errors.New("public key hex string is empty")
+	}
 	b, err := hex.DecodeString(h)
 	if err != nil {
 		return nil, fmt.Errorf("invalid public key hex: %w", err)
@@ -115,6 +127,9 @@ func LoadECDSAPublicKeyFromHex(h string) (*ecdsa.PublicKey, error) {
 
 // LoadECDSAPublicKeyFromBase64 从Base64字符串加载ECDSA公钥
 func LoadECDSAPublicKeyFromBase64(b64 string) (*ecdsa.PublicKey, error) {
+	if b64 == "" {
+		return nil, errors.New("public key base64 string is empty")
+	}
 	b, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid public key base64: %w", err)
@@ -123,18 +138,46 @@ func LoadECDSAPublicKeyFromBase64(b64 string) (*ecdsa.PublicKey, error) {
 }
 
 // GetECDSAPublicKeyBytes 获取ECDSA公钥的字节表示（未压缩格式）
-func GetECDSAPublicKeyBytes(pub ecdsa.PublicKey) []byte {
+func GetECDSAPublicKeyBytes(pub *ecdsa.PublicKey) ([]byte, error) {
+	if pub == nil {
+		return nil, errors.New("public key cannot be nil")
+	}
+	if !ecdsaCurve.IsOnCurve(pub.X, pub.Y) {
+		return nil, errors.New("public key is not on P256 curve")
+	}
+
 	result := make([]byte, ecdsaPubKeyLen)
 	result[0] = 0x04
 	pub.X.FillBytes(result[1:33])  // 确保X占32字节（补前导零）
 	pub.Y.FillBytes(result[33:65]) // 确保Y占32字节（补前导零）
+	return result, nil
+}
+
+// GetECDSAPublicKeyBytesUnsafe 获取ECDSA公钥的字节表示（未压缩格式），不进行验证
+// 仅用于性能敏感且已确认公钥有效的场景
+func GetECDSAPublicKeyBytesUnsafe(pub *ecdsa.PublicKey) []byte {
+	result := make([]byte, ecdsaPubKeyLen)
+	result[0] = 0x04
+	pub.X.FillBytes(result[1:33])
+	pub.Y.FillBytes(result[33:65])
 	return result
 }
 
 // GetECDSAPrivateKeyBytes 获取ECDSA私钥的字节表示（固定32字节）
-func GetECDSAPrivateKeyBytes(prk *ecdsa.PrivateKey) []byte {
+func GetECDSAPrivateKeyBytes(prk *ecdsa.PrivateKey) ([]byte, error) {
+	if prk == nil {
+		return nil, errors.New("private key cannot be nil")
+	}
 	b := make([]byte, ecdsaPrivKeyLen)
 	prk.D.FillBytes(b) // 确保私钥占32字节（补前导零）
+	return b, nil
+}
+
+// GetECDSAPrivateKeyBytesUnsafe 获取ECDSA私钥的字节表示（固定32字节），不进行验证
+// 仅用于性能敏感且已确认私钥有效的场景
+func GetECDSAPrivateKeyBytesUnsafe(prk *ecdsa.PrivateKey) []byte {
+	b := make([]byte, ecdsaPrivKeyLen)
+	prk.D.FillBytes(b)
 	return b
 }
 
@@ -143,6 +186,9 @@ func GetECDSAPrivateKeyBytes(prk *ecdsa.PrivateKey) []byte {
 func SignECDSA(privateKey *ecdsa.PrivateKey, message []byte) ([]byte, error) {
 	if privateKey == nil {
 		return nil, errors.New("private key cannot be nil")
+	}
+	if len(message) == 0 {
+		return nil, errors.New("message cannot be empty")
 	}
 
 	// 计算消息哈希（SHA-256）
@@ -175,8 +221,21 @@ func VerifyECDSA(publicKey *ecdsa.PublicKey, message, signature []byte) error {
 	if publicKey == nil {
 		return errors.New("public key cannot be nil")
 	}
+	if len(message) == 0 {
+		return errors.New("message cannot be empty")
+	}
 	if len(signature) == 0 {
 		return errors.New("signature cannot be empty")
+	}
+
+	// 验证公钥有效性
+	if !publicKey.IsOnCurve(publicKey.X, publicKey.Y) {
+		return errors.New("invalid public key: not on curve")
+	}
+
+	// 验证公钥不是无穷远点
+	if publicKey.X.Sign() == 0 && publicKey.Y.Sign() == 0 {
+		return errors.New("invalid public key: point at infinity")
 	}
 
 	// 计算消息哈希（SHA-256）
@@ -200,12 +259,54 @@ func VerifyECDSA(publicKey *ecdsa.PublicKey, message, signature []byte) error {
 		return errors.New("signature S is out of valid range [1, n-1]")
 	}
 
+	// 检查是否为低S值（符合BIP-0062）
+	halfN := new(big.Int).Div(ecdsaCurveN, big.NewInt(2))
+	if sig.S.Cmp(halfN) > 0 {
+		return errors.New("signature S is not low S value")
+	}
+
 	// 验证签名是否匹配
 	if !ecdsa.Verify(publicKey, hash[:], sig.R, sig.S) {
 		return errors.New("signature verification failed: does not match message or public key")
 	}
 
 	return nil
+}
+
+// ECDSAPublicKeyToHex 将ECDSA公钥转换为十六进制字符串
+func ECDSAPublicKeyToHex(pub *ecdsa.PublicKey) (string, error) {
+	b, err := GetECDSAPublicKeyBytes(pub)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// ECDSAPrivateKeyToHex 将ECDSA私钥转换为十六进制字符串
+func ECDSAPrivateKeyToHex(prk *ecdsa.PrivateKey) (string, error) {
+	b, err := GetECDSAPrivateKeyBytes(prk)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// ECDSAPublicKeyToBase64 将ECDSA公钥转换为Base64字符串
+func ECDSAPublicKeyToBase64(pub *ecdsa.PublicKey) (string, error) {
+	b, err := GetECDSAPublicKeyBytes(pub)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// ECDSAPrivateKeyToBase64 将ECDSA私钥转换为Base64字符串
+func ECDSAPrivateKeyToBase64(prk *ecdsa.PrivateKey) (string, error) {
+	b, err := GetECDSAPrivateKeyBytes(prk)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 // ecdsaSignature 用于ASN.1编码的签名结构（R和S为大整数）

@@ -2,9 +2,11 @@ package ecc
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"testing"
 )
 
@@ -240,5 +242,53 @@ func BenchmarkECDSAVerify(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestGenSharedKeyECDSA(t *testing.T) {
+	alicePrk, err := CreateECDSA()
+	if err != nil {
+		t.Fatalf("CreateECDSA for Alice failed: %v", err)
+	}
+	bobPrk, err := CreateECDSA()
+	if err != nil {
+		t.Fatalf("CreateECDSA for Bob failed: %v", err)
+	}
+
+	aliceShared, err := GenSharedKeyECDSA(alicePrk, &bobPrk.PublicKey)
+	if err != nil {
+		t.Fatalf("Alice shared key generation failed: %v", err)
+	}
+	bobShared, err := GenSharedKeyECDSA(bobPrk, &alicePrk.PublicKey)
+	if err != nil {
+		t.Fatalf("Bob shared key generation failed: %v", err)
+	}
+
+	if len(aliceShared) != ecdsaPrivKeyLen || len(bobShared) != ecdsaPrivKeyLen {
+		t.Fatalf("shared key length mismatch, expected %d bytes", ecdsaPrivKeyLen)
+	}
+	if !bytes.Equal(aliceShared, bobShared) {
+		t.Fatalf("shared keys mismatch:\nAlice: %x\nBob:   %x", aliceShared, bobShared)
+	}
+	if bytes.Equal(aliceShared, make([]byte, len(aliceShared))) {
+		t.Fatalf("shared key should not be all zeros")
+	}
+
+	// 错误分支：nil 输入
+	if _, err := GenSharedKeyECDSA(nil, &bobPrk.PublicKey); err == nil {
+		t.Error("expected error when owner private key is nil")
+	}
+	if _, err := GenSharedKeyECDSA(alicePrk, nil); err == nil {
+		t.Error("expected error when other public key is nil")
+	}
+
+	// 错误分支：伪造公钥（无穷远点）
+	invalidPub := &ecdsa.PublicKey{
+		Curve: ecdsaCurve,
+		X:     big.NewInt(0),
+		Y:     big.NewInt(0),
+	}
+	if _, err := GenSharedKeyECDSA(alicePrk, invalidPub); err == nil {
+		t.Error("expected error when public key is point at infinity")
 	}
 }

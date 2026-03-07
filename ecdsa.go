@@ -15,21 +15,14 @@ import (
 
 const (
 	// ECDSA 相关常量
-	ecdsaPubKeyLen   = 65     // 未压缩公钥长度: 1字节前缀(0x04) + 32字节X + 32字节Y
-	ecdsaPrivKeyLen  = 32     // P256私钥长度固定为32字节(256位)
-	pbkdf2Iterations = 120000 // PBKDF2 迭代次数（~0.1s 级别，权衡安全与性能）
+	ecdsaPubKeyLen  = 65 // 未压缩公钥长度: 1字节前缀(0x04) + 32字节X + 32字节Y
+	ecdsaPrivKeyLen = 32 // P256私钥长度固定为32字节(256位)
 )
 
 var (
-	ecdsaCurve  = elliptic.P256()       // 使用P256曲线
-	ecdsaCurveN = ecdsaCurve.Params().N // 曲线阶(n)，用于私钥和签名验证
-	// P256 曲线的阶（n）：用于校验 ECDSA 私钥 D 值合法性
-	p256Order = new(big.Int).SetBytes([]byte{
-		0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-		0xBC, 0xE6, 0xFA, 0xAD, 0xA7, 0x17, 0x9E, 0x84,
-		0xF3, 0xB9, 0xCA, 0xC2, 0xFC, 0x63, 0x25, 0x51,
-	})
+	ecdsaCurve      = elliptic.P256()                              // 使用P256曲线
+	ecdsaCurveN     = ecdsaCurve.Params().N                        // 曲线阶(n)，用于私钥和签名验证
+	ecdsaCurveHalfN = new(big.Int).Div(ecdsaCurveN, big.NewInt(2)) // ✅ 预计算
 )
 
 // CreateECDSA 生成新的ECDSA密钥对，用于数字签名
@@ -54,7 +47,8 @@ func LoadECDSAPrivateKey(b []byte) (*ecdsa.PrivateKey, error) {
 	d := new(big.Int).SetBytes(b)
 
 	// 验证D的有效性：必须满足 1 ≤ D ≤ n-1（n为曲线阶）
-	if d.Cmp(big.NewInt(1)) < 0 || d.Cmp(new(big.Int).Sub(ecdsaCurveN, big.NewInt(1))) > 0 {
+	// d.Sign() <= 0 表示 D <= 0；d.Cmp(ecdsaCurveN) >= 0 表示 D >= n
+	if d.Sign() <= 0 || d.Cmp(ecdsaCurveN) >= 0 {
 		return nil, errors.New("private key D is out of valid range [1, n-1]")
 	}
 
@@ -208,9 +202,8 @@ func SignECDSA(privateKey *ecdsa.PrivateKey, message []byte) ([]byte, error) {
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
-	// 调整S为低S值（若S > n/2，则用n - S替换，避免签名重放风险）
-	halfN := new(big.Int).Div(ecdsaCurveN, big.NewInt(2))
-	if s.Cmp(halfN) > 0 {
+	// 调整S为低S值（若S > n/2，则用n - S替换）
+	if s.Cmp(ecdsaCurveHalfN) > 0 { // ✅ 使用预计算的全局变量
 		s.Sub(ecdsaCurveN, s)
 	}
 
@@ -237,7 +230,7 @@ func VerifyECDSA(publicKey *ecdsa.PublicKey, message, signature []byte) error {
 	}
 
 	// 验证公钥有效性
-	if !publicKey.IsOnCurve(publicKey.X, publicKey.Y) {
+	if !publicKey.Curve.IsOnCurve(publicKey.X, publicKey.Y) {
 		return errors.New("invalid public key: not on curve")
 	}
 
@@ -260,16 +253,15 @@ func VerifyECDSA(publicKey *ecdsa.PublicKey, message, signature []byte) error {
 	}
 
 	// 验证R和S的有效性（必须在[1, n-1]范围内）
-	if sig.R.Cmp(big.NewInt(1)) < 0 || sig.R.Cmp(new(big.Int).Sub(ecdsaCurveN, big.NewInt(1))) > 0 {
+	if sig.R.Sign() <= 0 || sig.R.Cmp(ecdsaCurveN) >= 0 {
 		return errors.New("signature R is out of valid range [1, n-1]")
 	}
-	if sig.S.Cmp(big.NewInt(1)) < 0 || sig.S.Cmp(new(big.Int).Sub(ecdsaCurveN, big.NewInt(1))) > 0 {
+	if sig.S.Sign() <= 0 || sig.S.Cmp(ecdsaCurveN) >= 0 {
 		return errors.New("signature S is out of valid range [1, n-1]")
 	}
 
 	// 检查是否为低S值（符合BIP-0062）
-	halfN := new(big.Int).Div(ecdsaCurveN, big.NewInt(2))
-	if sig.S.Cmp(halfN) > 0 {
+	if sig.S.Cmp(ecdsaCurveHalfN) > 0 { // ✅ 使用预计算的全局变量
 		return errors.New("signature S is not low S value")
 	}
 
@@ -281,9 +273,9 @@ func VerifyECDSA(publicKey *ecdsa.PublicKey, message, signature []byte) error {
 	return nil
 }
 
-// GenSharedKeyECDSA 复用 ECDSA 公/私钥对实现密钥协商（等价 ECDH）
-// 注意：此函数仅支持 P256（nistp256）曲线的 ECDSA 密钥对
-// 返回值：32字节安全派生的共享密钥（非直接返回X坐标）
+// GenSharedKeyECDSA 复用 ECDSA 公/私钥对实现 ECDH 密钥协商
+// 要求：双方密钥必须基于 P-256 (nistp256) 曲线
+// 返回：32 字节共享密钥（通过共享点 X 坐标经 SHA256 派生）
 func GenSharedKeyECDSA(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([]byte, error) {
 	// 1. 基础非空校验
 	if ownerPrk == nil {
@@ -301,48 +293,43 @@ func GenSharedKeyECDSA(ownerPrk *ecdsa.PrivateKey, otherPub *ecdsa.PublicKey) ([
 		return nil, fmt.Errorf("ECDSA public key curve must be P256 (nistp256), got %s", otherPub.Curve.Params().Name)
 	}
 
-	// 3. ECDSA 私钥 D 值合法性校验（核心！ECDSA 私钥必须满足 1 ≤ D ≤ n-1）
-	if ownerPrk.D == nil || ownerPrk.D.Sign() == 0 || ownerPrk.D.Cmp(p256Order) >= 0 {
-		return nil, errors.New("ECDSA private key D value is invalid (must be 1 ≤ D ≤ n-1)")
+	// 3. ECDSA 私钥 D 值合法性校验：必须满足 1 ≤ D ≤ n-1
+	if ownerPrk.D == nil || ownerPrk.D.Sign() <= 0 || ownerPrk.D.Cmp(ecdsaCurveN) >= 0 {
+		return nil, errors.New("ECDSA private key D value is invalid (must be in range [1, n-1])")
 	}
 
-	// 4. ECDSA 公钥合法性校验（防御恶意公钥）
-	// 4.1 公钥是否在 P256 曲线上
-	if !ecdsaCurve.IsOnCurve(otherPub.X, otherPub.Y) {
+	// 4. ECDSA 公钥合法性校验
+	// 4.1 是否在 P256 曲线上 —— ✅ 使用公钥自身的 Curve 字段进行校验
+	if !otherPub.Curve.IsOnCurve(otherPub.X, otherPub.Y) {
 		return nil, errors.New("ECDSA public key is not on P256 curve")
 	}
-	// 4.2 公钥是否为无穷远点（无效点）
+	// 4.2 是否为无穷远点（无效点）
 	if otherPub.X.Sign() == 0 && otherPub.Y.Sign() == 0 {
 		return nil, errors.New("ECDSA public key is point at infinity (invalid)")
 	}
-	// 4.3 公钥阶校验（防止小子群攻击）：P256 余因子 h=1，故 n*Q 必须为无穷远点
-	qx, qy := ecdsaCurve.ScalarMult(otherPub.X, otherPub.Y, p256Order.Bytes())
-	if !(qx == nil && qy == nil) {
-		if qx == nil || qy == nil || qx.Sign() != 0 || qy.Sign() != 0 {
-			return nil, errors.New("ECDSA public key is in small subgroup (attack risk)")
-		}
-	}
 
-	// 5. ECDH 核心计算：用 ECDSA 私钥 D 值 × 对方 ECDSA 公钥 Q
+	// 5. ECDH 核心计算：sharedPoint = D * otherPub
 	sharedX, sharedY := ecdsaCurve.ScalarMult(otherPub.X, otherPub.Y, ownerPrk.D.Bytes())
-	// 5.1 共享点是否为无穷远点（协商失败）
+
+	// 5.1 检查共享点是否为无穷远点（理论上不应发生，但防御性编程）
 	if sharedX.Sign() == 0 && sharedY.Sign() == 0 {
 		return nil, errors.New("derived shared point is at infinity (negotiation failed)")
 	}
-	// 5.2 共享点是否在曲线上（防御恶意公钥篡改）
+
+	// 5.2 防御性检查：共享点应在曲线上
 	if !ecdsaCurve.IsOnCurve(sharedX, sharedY) {
-		return nil, errors.New("derived shared point is not on P256 curve (invalid)")
+		return nil, errors.New("derived shared point is not on P256 curve")
 	}
 
-	// 6. 安全密钥派生（PBKDF2：共享点 X 作为输入，双方公钥拼接为盐值）
+	// 6. 安全密钥派生：使用共享点 X 坐标 + SHA256
 	sharedXBytes := make([]byte, ecdsaPrivKeyLen)
-	sharedX.FillBytes(sharedXBytes) // 无截断/补0，P256 特性
+	sharedX.FillBytes(sharedXBytes) // 确保 32 字节，高位补零
 
-	// 6.2 KDF 派生：用 SHA256 哈希（符合 NIST 规范，提升随机性）
-	// 若需更强安全性，可添加盐值（如双方身份、会话ID），示例中用空盐（基础版）
 	kdf := sha256.New()
 	kdf.Write(sharedXBytes)
-	derivedKey := kdf.Sum(nil) // 32 字节安全共享密钥
+	derivedKey := kdf.Sum(nil) // 32 字节
+
+	SecureZeroBytes(sharedXBytes)
 
 	return derivedKey, nil
 }

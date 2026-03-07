@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
-	"crypto/hmac"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,13 +19,9 @@ const (
 	ecdhPubKeyLen = 65 // P256曲线未压缩公钥固定为65字节：0x04 + 32字节X + 32字节Y
 
 	// 加密相关常量
-	keyLen        = 32                        // AES-256 密钥长度
-	nonceLen      = 12                        // GCM推荐nonce长度
-	hkdfInfoEnc   = "ecdh-aes-gcm-encryption" // HKDF上下文标签（加密密钥）
-	hkdfInfoNonce = "ecdh-aes-gcm-nonce"      // HKDF上下文标签（nonce派生）
-	hkdfInfoAAD   = "ecdh-aes-gcm-aad"        // HKDF上下文标签（AAD认证）
-	hkdfSalt      = "ecdh-aes-gcm-v1-salt"    // HKDF固定盐值
-
+	hkdfInfoEnc = "ecdh-aes-gcm-encryption:" // HKDF上下文标签（加密密钥）
+	keyLen      = 32                         // AES-256 密钥长度
+	nonceLen    = 12                         // GCM推荐nonce长度
 	// 消息格式版本
 	protocolVersion = 0x01
 )
@@ -191,30 +187,27 @@ func Encrypt(inputPrk *ecdh.PrivateKey, publicTo []byte, message, additionalData
 	}
 	defer SecureZeroBytes(sharedKey) // 清理共享密钥
 
-	// 使用HMAC派生密钥
-	nonce := SecureNonce(nonceLen)
-	encKey := HmacSHA256(sharedKey, nonce)
-
-	defer SecureZeroBytes(encKey) // 清理加密密钥
-
-	// 构造安全的AAD（包含版本信息和HMAC保护）
-	aad, err := constructSecureAAD(additionalData, ephemPubBytes, nonce, protocolVersion)
+	aesKey, err := HkdfKey(sharedKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct AAD: %w", err)
+		return nil, err
 	}
 
-	// AES-GCM加密（使用派生的nonce）
-	gcmData, err := aesGCMEncryptWithNonce(message, encKey, nonce, aad)
+	defer SecureZeroBytes(aesKey) // 清理加密密钥
+
+	// 构造安全的AAD（包含版本信息）
+	aad := constructSecureAAD(additionalData, ephemPubBytes, protocolVersion)
+
+	// AES-GCM加密
+	gcmData, err := aesGCMEncrypt(message, aesKey, aad)
 	if err != nil {
 		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
 
-	// 最终消息：版本 + 临时公钥 + 随机数 + GCM数据
-	result := make([]byte, 1+len(ephemPubBytes)+len(nonce)+len(gcmData))
+	// 最终消息：版本 + 临时公钥 + GCM数据
+	result := make([]byte, 1+len(ephemPubBytes)+len(gcmData))
 	result[0] = protocolVersion
 	copy(result[1:], ephemPubBytes)
-	copy(result[1+len(ephemPubBytes):], nonce)
-	copy(result[1+len(ephemPubBytes)+len(nonce):], gcmData)
+	copy(result[1+len(ephemPubBytes):], gcmData)
 
 	return result, nil
 }
@@ -222,7 +215,7 @@ func Encrypt(inputPrk *ecdh.PrivateKey, publicTo []byte, message, additionalData
 // Decrypt 使用ECDH+AES-GCM解密消息
 func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData, dst []byte) ([]byte, error) {
 	// 解析消息
-	if len(msg) < 1+ecdhPubKeyLen+nonceLen+16 {
+	if len(msg) < 1+ecdhPubKeyLen+16 {
 		return nil, errors.New("message too short")
 	}
 	version := msg[0]
@@ -231,8 +224,7 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData, dst []byte) ([]by
 	}
 
 	ephemPubBytes := msg[1 : 1+ecdhPubKeyLen]
-	nonce := msg[1+ecdhPubKeyLen : 1+ecdhPubKeyLen+nonceLen]
-	ciphertextWithTag := msg[1+ecdhPubKeyLen+nonceLen:]
+	ciphertextWithTag := msg[1+ecdhPubKeyLen:]
 
 	ephemPub, err := LoadECDHPublicKey(ephemPubBytes)
 	if err != nil {
@@ -245,14 +237,15 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData, dst []byte) ([]by
 	}
 	defer SecureZeroBytes(sharedKey)
 
-	encKey := HmacSHA256(sharedKey, nonce)
-
-	defer SecureZeroBytes(encKey)
-
-	aad, err := constructSecureAAD(additionalData, ephemPubBytes, nonce, version)
+	aesKey, err := HkdfKey(sharedKey)
 	if err != nil {
 		return nil, err
 	}
+
+	defer SecureZeroBytes(aesKey)
+
+	// 构造安全的AAD（包含版本信息）
+	aad := constructSecureAAD(additionalData, ephemPubBytes, version)
 
 	// === 关键修复：检查 dst 容量 ===
 	expectedPlaintextLen := len(ciphertextWithTag) - 16 // GCM auth tag is always 16 bytes
@@ -264,97 +257,131 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData, dst []byte) ([]by
 			)
 		}
 		// 复用 dst 内存
-		return aesGCMDecryptWithNonce(ciphertextWithTag, encKey, nonce, aad, dst)
+		return AesGCMDecrypt(ciphertextWithTag, aesKey, aad, dst)
 	}
 
 	// 分配新内存
-	return aesGCMDecryptWithNonce(ciphertextWithTag, encKey, nonce, aad, nil)
+	return AesGCMDecrypt(ciphertextWithTag, aesKey, aad, nil)
 
 }
 
 // --------------- 安全改进的工具函数 ---------------
 
-func SecureNonce(l int) []byte {
-	iv := make([]byte, l)
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		panic(err)
+// HkdfKey 使用 HKDF-SHA256 从 ECDH 共享密钥派生 AES-256 密钥
+// 参数:
+//   - sharedKey: ECDH 协商得到的原始共享秘密（raw shared secret）
+func HkdfKey(sharedKey []byte) ([]byte, error) {
+	if len(sharedKey) == 0 {
+		return nil, errors.New("sharedKey cannot be empty")
 	}
-	return iv
+
+	result, err := hkdf.Key(sha256.New, sharedKey, nil, hkdfInfoEnc, keyLen)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
-// HmacSHA256 返回原始字节数组的HMAC-SHA256
-func HmacSHA256(data, key []byte) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write(data)
-	return h.Sum(nil)
+func SecureNonce(l int) ([]byte, error) {
+	nonce := make([]byte, l)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	return nonce, nil
 }
 
 // constructSecureAAD 构造安全的附加认证数据
-func constructSecureAAD(additionalData, ephemPubBytes, nonce []byte, version byte) ([]byte, error) {
-	h := hmac.New(sha256.New, nonce)
-	// 流式写入，避免中间大切片分配
-	h.Write([]byte{version})
-	h.Write(additionalData)
-	h.Write(ephemPubBytes)
-	h.Write(nonce)
-	return h.Sum(nil), nil
+func constructSecureAAD(additionalData, ephemPubBytes []byte, version byte) []byte {
+	aad := make([]byte, 1+len(additionalData)+len(ephemPubBytes))
+	aad[0] = version
+	copy(aad[1:], additionalData)
+	copy(aad[1+len(additionalData):], ephemPubBytes)
+	return aad
 }
 
-// aesGCMEncryptWithNonce 使用指定nonce进行AES-GCM加密
-func aesGCMEncryptWithNonce(plaintext, key, nonce, aad []byte) ([]byte, error) {
-	if len(key) != keyLen {
-		return nil, fmt.Errorf("key must be %d bytes for AES-256", keyLen)
-	}
-	if len(nonce) != nonceLen {
-		return nil, fmt.Errorf("nonce must be %d bytes for GCM", nonceLen)
+// aesGCMEncrypt Byte(Nonce + Ciphertext + AuthTag)
+func aesGCMEncrypt(plaintext, key, additionalData []byte) ([]byte, error) {
+	// 1. 输入验证
+	if len(key) != 32 {
+		return nil, errors.New("key must be 32 bytes for AES-256")
 	}
 
+	// 2. 创建 AES 加密器
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
 
+	// 3. 创建 GCM 模式（AEAD: Authenticated Encryption with Associated Data）
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	// 使用派生的nonce进行加密
-	ciphertext := gcm.Seal(nil, nonce, plaintext, aad)
+	// 4. 生成 Nonce（GCM 标准：12 字节）
+	// 注意：Nonce 必须唯一，否则会破坏 GCM 安全性
+	nonce, err := SecureNonce(nonceLen)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
 
-	// 返回密文 + AuthTag（不包含nonce）
-	return ciphertext, nil
+	// 5. 加密并生成认证标签（单步操作）
+	// Seal 会自动：
+	//   - 加密 plaintext
+	//   - 对 ciphertext + additionalData 生成 GMAC 认证标签
+	//   - 返回：ciphertext + authTag
+	ciphertext := gcm.Seal(nil, nonce, plaintext, additionalData)
+
+	// 6. 拼接：Nonce + Ciphertext + AuthTag
+	result := append(nonce, ciphertext...)
+
+	return result, nil
 }
 
-// aesGCMDecryptWithNonce 使用指定nonce进行AES-GCM解密
-func aesGCMDecryptWithNonce(ciphertext, key, nonce, aad, dst []byte) ([]byte, error) {
-	if len(key) != keyLen {
-		return nil, fmt.Errorf("key must be %d bytes for AES-256", keyLen)
-	}
-	if len(nonce) != nonceLen {
-		return nil, fmt.Errorf("nonce must be %d bytes for GCM", nonceLen)
+// AesGCMDecrypt AES-GCM 解密基础方法
+func AesGCMDecrypt(data, key, additionalData, dst []byte) ([]byte, error) {
+	// 1. 输入验证
+	if len(key) != 32 {
+		return nil, errors.New("key must be 32 bytes for AES-256")
 	}
 
+	// 3. 创建 AES 加密器
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
 
+	// 4. 创建 GCM 模式
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	if len(ciphertext) < 16 {
-		return nil, errors.New("ciphertext too short")
+	// 5. 检查数据长度（Nonce + Ciphertext + AuthTag）
+	nonceSize := gcm.NonceSize()
+	minLen := nonceSize + gcm.Overhead()
+	if len(data) < minLen {
+		return nil, fmt.Errorf("encrypted data too short (expected at least %d bytes)", minLen)
 	}
 
+	// 6. 分离 Nonce 和 Ciphertext+AuthTag
+	nonce := data[:nonceSize]
+	ciphertext := data[nonceSize:]
+
+	// 7. 解密并验证认证标签（单步操作）
+	// Open 会自动：
+	//   - 验证 GMAC 认证标签（防篡改）
+	//   - 验证 additionalData（如果提供）
+	//   - 解密 ciphertext
+	// 任何验证失败都会返回 error
 	if dst == nil {
 		// 解密并验证
-		return gcm.Open(nil, nonce, ciphertext, aad)
+		return gcm.Open(nil, nonce, ciphertext, additionalData)
 	}
 	// 解密并验证
-	return gcm.Open(dst[:0], nonce, ciphertext, aad)
+	return gcm.Open(dst[:0], nonce, ciphertext, additionalData)
+
 }
 
 // SecureZeroBytes 安全清理字节切片（防止编译器优化）

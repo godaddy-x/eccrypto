@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	testMsg = []byte("我是中国人梵蒂冈啊!!!ABC@#")
+	testMsg = []byte("测试下混合数据!!!ABC@#")
 )
 
 func BenchmarkECDHCreate(b *testing.B) {
@@ -51,7 +51,7 @@ func BenchmarkECDHEncrypt(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		Decrypt(prk, r, nil)
+		Decrypt(prk, r, nil, nil)
 	}
 }
 
@@ -68,7 +68,7 @@ func BenchmarkECDHDecrypt(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := Decrypt(prk, r, nil)
+		_, err := Decrypt(prk, r, nil, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -89,7 +89,7 @@ func TestECDHEncryptDecrypt(t *testing.T) {
 		t.Fatalf("Encryption failed: %v", err)
 	}
 
-	decrypted, err := Decrypt(prk, r, nil)
+	decrypted, err := Decrypt(prk, r, nil, nil)
 	if err != nil {
 		t.Fatalf("Decryption failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestECDHBasic(t *testing.T) {
 		t.Fatalf("Encryption failed: %v", err)
 	}
 
-	decrypted, err := Decrypt(bobPrk, encrypted, nil)
+	decrypted, err := Decrypt(bobPrk, encrypted, nil, nil)
 	if err != nil {
 		t.Fatalf("Decryption failed: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestTypeScriptCompatibility(t *testing.T) {
 		}
 
 		// 验证能够正确解密
-		decrypted, err := Decrypt(goPrk, encrypted, nil)
+		decrypted, err := Decrypt(goPrk, encrypted, nil, nil)
 		if err != nil {
 			t.Fatalf("Decrypt failed: %v", err)
 		}
@@ -262,7 +262,7 @@ func TestSecurityVulnerabilities(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := Decrypt(prk, tc.input, nil)
+			_, err := Decrypt(prk, tc.input, nil, nil)
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("Expected error for %s, but got none", tc.name)
@@ -316,7 +316,7 @@ func TestSecurityVulnerabilities(t *testing.T) {
 		}
 
 		// 验证能正确解密
-		decrypted, err := Decrypt(prk, result, nil)
+		decrypted, err := Decrypt(prk, result, nil, nil)
 		if err != nil {
 			t.Errorf("Decrypt failed: %v", err)
 		}

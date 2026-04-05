@@ -10,6 +10,7 @@ Go helpers for **ECIES-style sealed messaging** (ECDH → HKDF-SHA256 → AES-GC
   - [X25519 — `ecdh_x25519.go`](#x25519--ecdh_x25519go)
 - [ECDSA — `ecdsa.go`](#ecdsa--ecdsago)
 - [Ed25519 — `ed25519.go`](#ed25519--ed25519go)
+- [Dual derive (one master seed)](#dual-derive-one-master-seed)
 - [Benchmarks](#benchmarks)
 - [Security & interoperability](#security--interoperability)
 
@@ -21,6 +22,7 @@ Go helpers for **ECIES-style sealed messaging** (ECDH → HKDF-SHA256 → AES-GC
 | `ecdh_x25519.go` | X25519 ECDH; `EncryptX25519` / `DecryptX25519`; protocol **`0x02`**; **32-byte** keys |
 | `ecdsa.go` | P-256 ECDSA; DER signatures; includes `GenSharedKeyECDSA` (ECDH-style shared secret from ECDSA keys) |
 | `ed25519.go` | Ed25519 sign/verify; 64-byte raw signatures (not DER) |
+| `master_seed_derive.go` | One high-entropy **master seed** → HKDF → separate **Ed25519** + **X25519** private keys |
 | `secure_zero.go` | `SecureZeroBytes` (used by several helpers) |
 
 ## Sealed messaging (ECIES)
@@ -83,6 +85,14 @@ Signing and verification via `crypto/ed25519`. **Not** for key exchange (use X25
 - **Bytes / encoding:** `GetEd25519PublicKeyBytes`, `GetEd25519PrivateKeyBytes`, `Ed25519…ToHex`, `Ed25519…ToBase64`  
   Minimal storage: keep **32-byte seed** and `LoadEd25519PrivateKey`; expanded 64-byte form must keep seed and suffix consistent if you generate signatures (stdlib signing uses both parts of the blob)
 
+## Dual derive (one master seed)
+
+Implementation: `master_seed_derive.go`. From one **master secret** (IKM), **HKDF-SHA256** produces **two independent 32-byte subkeys** using fixed salt `eccrypto:dual25519:v1` and distinct `info` strings (`…:ed25519-seed` vs `…:x25519-scalar`). **Do not** use the same 32 bytes for both curves without this split. **Do not** reuse the Ed25519 seed as an X25519 scalar (or vice versa).
+
+- **Minimum IKM length:** `MinMasterSeedLen` (**16**); prefer **≥ 32** bytes of CSPRNG output, or a key-stretching output (Argon2id, scrypt, …) for passwords.
+- **API (raw `[]byte` IKM):** `DeriveEd25519FromMasterSeed`, `DeriveX25519FromMasterSeed`, `DeriveEd25519AndX25519FromMasterSeed` (if X25519 fails, the Ed25519 material is zeroed).
+- **API (Base64 StdEncoding):** `DeriveEd25519FromMasterSeedBase64`, `DeriveX25519FromMasterSeedBase64`, `DeriveEd25519AndX25519FromMasterSeedBase64` — decode then same HKDF; decoded bytes are zeroed before return.
+
 ## Benchmarks
 
 Approximate results (one machine: **Intel i5-13600KF**; P-256 / ECDSA rows historically **Go 1.20**; X25519 / Ed25519 refreshed with **`go test -run=^$ -bench='BenchmarkECDH|BenchmarkX25519|BenchmarkECDSA|BenchmarkEd25519' -benchmem`** — treat as order-of-magnitude only).
@@ -108,3 +118,4 @@ BenchmarkEd25519Verify-20          ~43,000    ~28,000 ns/op
 - **Signatures** — ECDSA uses DER + low-S checks; Ed25519 uses **64-byte raw** signatures. Peers must agree on algorithm and encoding.
 - **P-256 public keys** in this package’s ECDH helpers follow **uncompressed SEC1** (65 bytes), which matches many ecosystems (e.g. JS **elliptic**-style uncompressed points). X25519 uses **32-byte** Montgomery wire format.
 - **Memory** — `SecureZeroBytes` overwrites slices you pass in; it does not defeat all copies the runtime or hardware might keep. Sensitive buffers should still be discarded when done.
+- **Dual derive** — Master IKM should be high-entropy; HKDF labels are fixed for this package — changing them in code breaks compatibility with existing backups.

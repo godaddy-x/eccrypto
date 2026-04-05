@@ -384,16 +384,6 @@ func AesGCMDecrypt(data, key, additionalData, dst []byte) ([]byte, error) {
 
 }
 
-// SecureZeroBytes 安全清理字节切片（防止编译器优化）
-func SecureZeroBytes(data []byte) {
-	if data == nil {
-		return
-	}
-	for i := range data {
-		data[i] = 0
-	}
-}
-
 // --------------- 便利函数 ---------------
 
 // ECDHPublicKeyToHex 将ECDH公钥转换为十六进制字符串

@@ -1,6 +1,6 @@
 # eccrypto
 
-Go helpers for **ECIES-style sealed messaging** (ECDH → HKDF-SHA256 → AES-GCM) on **P-256** and **X25519**, plus **ECDSA** and **Ed25519** signatures. All crypto uses the **standard library** (`crypto/ecdh`, `crypto/ecdsa`, `crypto/ed25519`, …).
+Go helpers for **ECIES-style sealed messaging** (ECDH/KEM → HKDF-SHA256 → AES-GCM) and **digital signatures**. Classical: P-256 / X25519 / ECDSA / Ed25519. Post-quantum: **ML-KEM-1024** (`crypto/mlkem`) and **ML-DSA-87** (via `filippo.io/mldsa` until `crypto/mldsa` ships in Go 1.27+).
 
 ## Contents
 
@@ -10,6 +10,8 @@ Go helpers for **ECIES-style sealed messaging** (ECDH → HKDF-SHA256 → AES-GC
   - [X25519 — `ecdh_x25519.go`](#x25519--ecdh_x25519go)
 - [ECDSA — `ecdsa.go`](#ecdsa--ecdsago)
 - [Ed25519 — `ed25519.go`](#ed25519--ed25519go)
+- [ML-KEM-1024 — `mlkem.go`](#ml-kem-1024--mlkemgo)
+- [ML-DSA-87 — `mldsa.go`](#ml-dsa-87--mldsago)
 - [Dual derive (one master seed)](#dual-derive-one-master-seed)
 - [Benchmarks](#benchmarks)
 - [Security & interoperability](#security--interoperability)
@@ -22,6 +24,8 @@ Go helpers for **ECIES-style sealed messaging** (ECDH → HKDF-SHA256 → AES-GC
 | `ecdh_x25519.go` | X25519 ECDH; `EncryptX25519` / `DecryptX25519`; protocol **`0x02`**; **32-byte** keys |
 | `ecdsa.go` | P-256 ECDSA; DER signatures; includes `GenSharedKeyECDSA` (ECDH-style shared secret from ECDSA keys) |
 | `ed25519.go` | Ed25519 sign/verify; 64-byte raw signatures (not DER) |
+| `mlkem.go` | ML-KEM-1024 (`crypto/mlkem`); `EncryptMLKEM1024` / `DecryptMLKEM1024`; protocol **`0x04`**; KEM ciphertext **1568** bytes |
+| `mldsa.go` | ML-DSA-87 sign/verify (FIPS 204); mirrors `ed25519.go` API shape |
 | `master_seed_derive.go` | One high-entropy **master seed** → HKDF → separate **Ed25519** + **X25519** private keys |
 | `secure_zero.go` | `SecureZeroBytes` (used by several helpers) |
 
@@ -36,7 +40,9 @@ Both stacks share the same **idea**: ephemeral (or supplied) sender key, ECDH wi
 | HKDF `info` | `ecdh-aes-gcm-encryption:` | `ecdh-x25519-aes-gcm-encryption:` |
 | Encrypt / Decrypt | `Encrypt`, `Decrypt` | `EncryptX25519`, `DecryptX25519` |
 
-Blob layout: `[version:1][ephemeral public key][nonce ‖ ciphertext ‖ GCM tag]`.
+Blob layout (classical): `[version:1][ephemeral public key][nonce ‖ ciphertext ‖ GCM tag]`.
+
+**ML-KEM-1024** (`mlkem.go`, `crypto/mlkem`): `[version 0x04][KEM ciphertext 1568][nonce ‖ ciphertext ‖ GCM tag]` — shared secret from KEM encapsulation to the recipient’s **1568-byte** encapsulation key.
 
 ### P-256 — `ecdh.go`
 
@@ -85,6 +91,26 @@ Signing and verification via `crypto/ed25519`. **Not** for key exchange (use X25
 - **Bytes / encoding:** `GetEd25519PublicKeyBytes`, `GetEd25519PrivateKeyBytes`, `Ed25519…ToHex`, `Ed25519…ToBase64`  
   Minimal storage: keep **32-byte seed** and `LoadEd25519PrivateKey`; expanded 64-byte form must keep seed and suffix consistent if you generate signatures (stdlib signing uses both parts of the blob)
 
+## ML-KEM-1024 — `mlkem.go`
+
+Post-quantum KEM via **`crypto/mlkem`** (FIPS 203). Parameter set **ML-KEM-1024**.
+
+- **Create / load decap (private):** `CreateMLKEM1024`, `LoadMLKEM1024DecapsulationKey` (64-byte seed), `…FromHex`, `…FromBase64`
+- **Load encap (public):** `LoadMLKEM1024EncapsulationKey` (1568 bytes), `…FromHex`, `…FromBase64`
+- **KEM:** `EncapsulateMLKEM1024`, `DecapsulateMLKEM1024` → 32-byte shared secret + 1568-byte ciphertext
+- **Sealed message:** `EncryptMLKEM1024(publicTo, message, additionalData)`, `DecryptMLKEM1024(dk, msg, additionalData, dst)` — version **`0x04`**
+- **Helpers:** `MLKEM1024*ToHex` / `ToBase64`, `GetMLKEM1024ProtocolVersion`, `ValidateMLKEM1024EncapsulationKey`
+
+## ML-DSA-87 — `mldsa.go`
+
+Post-quantum signatures (FIPS 204). **Go 1.26** does not export `crypto/mldsa` yet; this module uses **`filippo.io/mldsa`** (same API shape as the proposed std package). Plan to switch to `crypto/mldsa` when you upgrade to **Go 1.27+**.
+
+- **Create / load private:** `CreateMLDSA87`, `LoadMLDSA87PrivateKey` (32-byte seed), `…FromHex`, `…FromBase64`
+- **Load public:** `LoadMLDSA87PublicKey` (2592 bytes), `…FromHex`, `…FromBase64`
+- **Sign / verify:** `SignMLDSA87`, `VerifyMLDSA87` — signature **4627** bytes; empty message allowed
+- **Derive public key:** `DeriveMLDSA87PublicKey`
+- **Helpers:** `MLDSA87*ToHex` / `ToBase64`, `ValidateMLDSA87PublicKey`
+
 ## Dual derive (one master seed)
 
 Implementation: `master_seed_derive.go`. From one **master secret** (IKM), **HKDF-SHA256** produces **two independent 32-byte subkeys** using fixed salt `eccrypto:dual25519:v1` and distinct `info` strings (`…:ed25519-seed` vs `…:x25519-scalar`). **Do not** use the same 32 bytes for both curves without this split. **Do not** reuse the Ed25519 seed as an X25519 scalar (or vice versa).
@@ -113,7 +139,7 @@ BenchmarkEd25519Verify-20          ~43,000    ~28,000 ns/op
 
 ## Security & interoperability
 
-- **Algorithms** — P-256 and X25519 ECDH, P-256 ECDSA, and Ed25519 are implemented with **Go stdlib** primitives.
+- **Algorithms** — Classical curves use **Go stdlib**; **ML-KEM** uses `crypto/mlkem`; **ML-DSA** uses `filippo.io/mldsa` until `crypto/mldsa` is in your Go release.
 - **ECIES** — Do not decrypt P-256 blobs with `DecryptX25519` or vice versa; version byte and HKDF labels differ by design.
 - **Signatures** — ECDSA uses DER + low-S checks; Ed25519 uses **64-byte raw** signatures. Peers must agree on algorithm and encoding.
 - **P-256 public keys** in this package’s ECDH helpers follow **uncompressed SEC1** (65 bytes), which matches many ecosystems (e.g. JS **elliptic**-style uncompressed points). X25519 uses **32-byte** Montgomery wire format.

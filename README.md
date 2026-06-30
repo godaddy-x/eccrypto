@@ -1,5 +1,7 @@
 # eccrypto
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Go helpers for **ECIES-style sealed messaging** (ECDH/KEM → HKDF-SHA256 → AES-GCM) and **digital signatures**. Classical: P-256 / X25519 / ECDSA / Ed25519. Post-quantum: **ML-KEM-1024** (`crypto/mlkem`) and **ML-DSA-87** (via `filippo.io/mldsa` until `crypto/mldsa` ships in Go 1.27+).
 
 ## Contents
@@ -145,3 +147,7 @@ BenchmarkEd25519Verify-20          ~43,000    ~28,000 ns/op
 - **P-256 public keys** in this package’s ECDH helpers follow **uncompressed SEC1** (65 bytes), which matches many ecosystems (e.g. JS **elliptic**-style uncompressed points). X25519 uses **32-byte** Montgomery wire format.
 - **Memory** — `SecureZeroBytes` overwrites slices you pass in; it does not defeat all copies the runtime or hardware might keep. Sensitive buffers should still be discarded when done.
 - **Dual derive** — Master IKM should be high-entropy; HKDF labels are fixed for this package — changing them in code breaks compatibility with existing backups.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright © 2026 godaddy-x.

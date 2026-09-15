@@ -242,10 +242,6 @@ func MLKEM1024DecapsulationKeyToBase64(dk *mlkem.DecapsulationKey1024) string {
 	return base64.StdEncoding.EncodeToString(dk.Bytes())
 }
 
-func GetMLKEM1024ProtocolVersion() byte {
-	return protocolVersionMLKEM1024
-}
-
 func ValidateMLKEM1024EncapsulationKey(b []byte) error {
 	_, err := LoadMLKEM1024EncapsulationKey(b)
 	return err

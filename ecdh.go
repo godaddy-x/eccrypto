@@ -175,7 +175,8 @@ func Encrypt(inputPrk *ecdh.PrivateKey, publicTo []byte, message, additionalData
 			return nil, fmt.Errorf("failed to generate ephemeral key: %w", err)
 		}
 	}
-	defer SecureZeroBytes(GetECDHPrivateKeyBytes(ephemPrk)) // 清理临时私钥
+	// Note: crypto/ecdh.PrivateKey has no wipe API; GetECDHPrivateKeyBytes returns a copy,
+	// so SecureZeroBytes on that copy does not clear the key object (avoid false hygiene).
 
 	ephemPub := ephemPrk.PublicKey()
 	ephemPubBytes := GetECDHPublicKeyBytes(ephemPub)
@@ -220,7 +221,7 @@ func Decrypt(privateKey *ecdh.PrivateKey, msg, additionalData, dst []byte) ([]by
 	}
 	version := msg[0]
 	if version != protocolVersion {
-		return nil, fmt.Errorf("unsupported version: %d", version)
+		return nil, fmt.Errorf("unsupported protocol version: %d", version)
 	}
 
 	ephemPubBytes := msg[1 : 1+ecdhPubKeyLen]

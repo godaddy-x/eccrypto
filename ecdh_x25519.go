@@ -164,7 +164,7 @@ func EncryptX25519(inputPrk *ecdh.PrivateKey, publicTo []byte, message, addition
 			return nil, fmt.Errorf("failed to generate ephemeral key: %w", err)
 		}
 	}
-	defer SecureZeroBytes(GetX25519PrivateKeyBytes(ephemPrk))
+	// Note: crypto/ecdh.PrivateKey has no wipe API; GetX25519PrivateKeyBytes returns a copy.
 
 	ephemPub := ephemPrk.PublicKey()
 	ephemPubBytes := GetX25519PublicKeyBytes(ephemPub)

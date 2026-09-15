@@ -101,7 +101,7 @@ Post-quantum KEM via **`crypto/mlkem`** (FIPS 203). Parameter set **ML-KEM-1024*
 - **Load encap (public):** `LoadMLKEM1024EncapsulationKey` (1568 bytes), `…FromHex`, `…FromBase64`
 - **KEM:** `EncapsulateMLKEM1024`, `DecapsulateMLKEM1024` → 32-byte shared secret + 1568-byte ciphertext
 - **Sealed message:** `EncryptMLKEM1024(publicTo, message, additionalData)`, `DecryptMLKEM1024(dk, msg, additionalData, dst)` — version **`0x04`**
-- **Helpers:** `MLKEM1024*ToHex` / `ToBase64`, `GetMLKEM1024ProtocolVersion`, `ValidateMLKEM1024EncapsulationKey`
+- **Helpers:** `MLKEM1024*ToHex` / `ToBase64`, `ValidateMLKEM1024EncapsulationKey`
 
 ## ML-DSA-87 — `mldsa.go`
 
